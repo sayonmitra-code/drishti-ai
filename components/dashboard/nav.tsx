@@ -3,21 +3,20 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { User } from '@supabase/supabase-js'
+import { logOut } from '@/lib/firebase/auth'
+import type { User } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function DashboardNav({ user }: { user: User }) {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
 
-  const isAdmin = user?.user_metadata?.role === 'admin'
+  const isAdmin = user?.email?.includes('admin')
 
   const handleLogout = async () => {
     setLoading(true)
-    await supabase.auth.signOut()
+    await logOut()
     router.push('/auth/login')
   }
 
@@ -39,17 +38,15 @@ export default function DashboardNav({ user }: { user: User }) {
             >
               {isAdmin ? 'Admin' : 'Citizen'} Dashboard
             </Link>
-            {isAdmin && (
-              <Link
-                href="/dashboard/admin"
-                className="text-foreground/70 hover:text-foreground transition px-3 py-2"
-              >
-                Monitoring
-              </Link>
-            )}
+            <Link
+              href="/dashboard/admin"
+              className="text-foreground/70 hover:text-foreground transition px-3 py-2"
+            >
+              Control Center
+            </Link>
             <div className="flex items-center gap-2 pl-4 border-l border-border">
-              <span className="text-foreground/70 text-sm truncate">
-                {user?.email}
+              <span className="text-foreground/70 text-sm truncate max-w-[150px]">
+                {user?.displayName || user?.email}
               </span>
               <ThemeToggle />
               <Button
@@ -68,3 +65,4 @@ export default function DashboardNav({ user }: { user: User }) {
     </nav>
   )
 }
+

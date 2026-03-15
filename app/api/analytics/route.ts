@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getMockAnalytics } from '@/lib/mock-data'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,6 +13,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Use mock data when Supabase is not configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      const analytics = getMockAnalytics(intersectionId)
+      return NextResponse.json({ analytics })
+    }
+
+    const { createClient } = await import('@/lib/supabase/server')
     const supabase = await createClient()
 
     const { data: analytics, error } = await supabase
@@ -26,9 +33,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ analytics })
   } catch (error) {
     console.error('Analytics fetch error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch analytics' },
-      { status: 500 }
-    )
+    const { getMockAnalytics } = await import('@/lib/mock-data')
+    const intersectionId = new URL(request.url).searchParams.get('intersection_id') || 'int-001'
+    return NextResponse.json({ analytics: getMockAnalytics(intersectionId) })
   }
 }
+

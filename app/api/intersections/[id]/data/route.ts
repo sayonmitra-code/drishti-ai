@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getMockSignals, getMockVehicleCounts } from '@/lib/mock-data'
 
 export async function GET(
   request: NextRequest,
@@ -15,9 +15,17 @@ export async function GET(
       )
     }
 
+    // Use mock data when Supabase is not configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({
+        signals: getMockSignals(id),
+        vehicleCounts: getMockVehicleCounts(id),
+      })
+    }
+
+    const { createClient } = await import('@/lib/supabase/server')
     const supabase = await createClient()
 
-    // Fetch signals
     const { data: signals, error: signalsError } = await supabase
       .from('traffic_signals')
       .select('*')
@@ -25,7 +33,6 @@ export async function GET(
 
     if (signalsError) throw signalsError
 
-    // Fetch latest vehicle counts grouped by signal
     const { data: vehicleData, error: vehicleError } = await supabase
       .from('vehicle_counts')
       .select('*')
@@ -35,24 +42,22 @@ export async function GET(
 
     if (vehicleError) throw vehicleError
 
-    // Aggregate vehicle counts by signal
     const vehicleCounts: Record<string, number> = {}
-    vehicleData?.forEach((v) => {
+    vehicleData?.forEach((v: { signal_id: string; vehicle_count: number }) => {
       if (!vehicleCounts[v.signal_id]) {
         vehicleCounts[v.signal_id] = 0
       }
       vehicleCounts[v.signal_id] += v.vehicle_count || 0
     })
 
-    return NextResponse.json({
-      signals,
-      vehicleCounts,
-    })
+    return NextResponse.json({ signals, vehicleCounts })
   } catch (error) {
     console.error('Intersection data error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch intersection data' },
-      { status: 500 }
-    )
+    const { id } = await params
+    return NextResponse.json({
+      signals: getMockSignals(id || 'int-001'),
+      vehicleCounts: getMockVehicleCounts(id || 'int-001'),
+    })
   }
 }
+
