@@ -190,18 +190,17 @@ export default function AdminDashboard({
 
   // Simulate real-time alerts
   useEffect(() => {
+    const liveAlerts: Array<{ message: string; type: SystemAlert['type'] }> = [
+      { message: 'Vehicle count spike detected — AI adjusting signal timings', type: 'warning' },
+      { message: 'Green wave synchronisation active on Gomti Nagar corridor', type: 'info' },
+      { message: 'Pedestrian crossing demand high at Hazratganj — extended walk phase', type: 'info' },
+    ]
     const interval = setInterval(() => {
-      const messages = [
-        'Vehicle count spike detected — AI adjusting signal timings',
-        'Green wave synchronisation active on Gomti Nagar corridor',
-        'Pedestrian crossing demand high at Hazratganj — extended walk phase',
-      ]
-      const types: SystemAlert['type'][] = ['info', 'warning', 'info']
-      const idx = Math.floor(Math.random() * messages.length)
+      const entry = liveAlerts[Math.floor(Math.random() * liveAlerts.length)]
       const newAlert: SystemAlert = {
         id: `alt-live-${Date.now()}`,
-        message: messages[idx],
-        type: types[idx],
+        message: entry.message,
+        type: entry.type,
         timestamp: new Date().toISOString(),
       }
       setAlerts((prev) => [newAlert, ...prev].slice(0, 20))
@@ -459,13 +458,10 @@ export default function AdminDashboard({
                   const badge = getCongestionBadge(intersection.id)
                   const isSelected = selectedIntersection?.id === intersection.id
                   return (
-                    <button
+                    <div
                       key={intersection.id}
-                      onClick={() => {
-                        setSelectedIntersection(intersection)
-                        setActiveTab('signals')
-                      }}
-                      className={`text-left p-3 rounded-xl border transition-all hover:shadow-md ${
+                      onClick={() => setSelectedIntersection(intersection)}
+                      className={`text-left p-3 rounded-xl border cursor-pointer transition-all hover:shadow-md ${
                         isSelected ? 'border-cyan-300 bg-cyan-50' : 'border-border bg-card hover:border-cyan-200'
                       }`}
                     >
@@ -479,9 +475,14 @@ export default function AdminDashboard({
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${badge.color}`}>
                           {badge.label}
                         </span>
-                        <span className="text-[10px] text-muted-foreground">Click to manage →</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelectedIntersection(intersection); setActiveTab('signals') }}
+                          className="text-[10px] text-cyan-600 hover:text-cyan-700 font-medium hover:underline"
+                        >
+                          Manage →
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   )
                 })}
               </div>
@@ -756,7 +757,7 @@ export default function AdminDashboard({
                       <button
                         onClick={() => handleToggleSchedule(schedule.id)}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${schedule.active ? 'bg-cyan-500' : 'bg-gray-300'}`}
-                        aria-label="Toggle schedule"
+                        aria-label={`${schedule.active ? 'Deactivate' : 'Activate'} ${schedule.intersectionName} ${schedule.mode} schedule`}
                       >
                         <span
                           className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${schedule.active ? 'translate-x-6' : 'translate-x-1'}`}

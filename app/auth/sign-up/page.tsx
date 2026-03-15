@@ -151,11 +151,13 @@ export default function SignUpPage() {
           </form>
 
           <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
               <div className="w-full border-t border-white/20" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="bg-transparent px-4 text-white/50">or continue with</span>
+              <span className="bg-transparent px-4 text-white/50" role="separator" aria-label="or continue with">
+                or continue with
+              </span>
             </div>
           </div>
 
