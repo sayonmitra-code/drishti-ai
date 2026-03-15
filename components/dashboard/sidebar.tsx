@@ -36,7 +36,7 @@ const NAV_ITEMS: SidebarItem[] = [
   { href: '/dashboard#map', icon: Map, label: 'Traffic Map' },
   { href: '/dashboard#signals', icon: TrafficCone, label: 'Traffic Signals' },
   { href: '/dashboard#analytics', icon: BarChart2, label: 'Traffic Analytics' },
-  { href: '/dashboard#predictions', icon: Brain, label: 'AI Predictions' },
+  { href: '/dashboard#predictions', icon: Brain, label: 'AI Insights' },
   { href: '/dashboard#alerts', icon: AlertTriangle, label: 'Incident Alerts' },
 ]
 

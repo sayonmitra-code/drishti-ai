@@ -25,6 +25,12 @@ import {
   Route,
   Info,
   AlertCircle,
+  Ambulance,
+  Crown,
+  Navigation,
+  ArrowRight,
+  CheckCheck,
+  Ban,
 } from 'lucide-react'
 import IntersectionMonitoring from './intersection-monitoring'
 import TrafficAnalytics from './traffic-analytics'
@@ -216,6 +222,27 @@ export default function AdminDashboard({
   const [alerts, setAlerts] = useState<SystemAlert[]>(getSystemAlerts)
   const [activeTab, setActiveTab] = useState('overview')
 
+  // VIP Corridor state
+  const [vipActive, setVipActive] = useState(false)
+  const [vipFrom, setVipFrom] = useState('')
+  const [vipTo, setVipTo] = useState('')
+  const [vipProgressStep, setVipProgressStep] = useState(0)
+  const [vipCorridorRoute, setVipCorridorRoute] = useState<string[]>([])
+
+  // Ambulance Priority state
+  const [ambulanceActive, setAmbulanceActive] = useState(false)
+  const [ambulanceRoute, setAmbulanceRoute] = useState('')
+  const [ambulanceProgressStep, setAmbulanceProgressStep] = useState(0)
+  const [ambulanceCorridorRoute, setAmbulanceCorridorRoute] = useState<string[]>([])
+
+  // Predefined ambulance waypoints per route option
+  const AMBULANCE_WAYPOINTS: Record<string, string[]> = {
+    'Gomti Nagar → King George Medical University': ['Gomti Nagar', 'Vibhuti Khand', 'Civil Lines', 'Hazratganj Chauraha'],
+    'Charbagh → Balrampur Hospital': ['Charbagh Railway Station', 'Lalbagh Junction', 'Kaiserbagh Intersection', 'Hazratganj Chauraha'],
+    'Alambagh → Ram Manohar Lohia Hospital': ['Alambagh', 'Aashiana', 'Charbagh Railway Station', 'Kaiserbagh Intersection'],
+    'Indira Nagar → Civil Hospital': ['Indira Nagar', 'Aliganj', 'Nirala Nagar', 'Hazratganj Chauraha'],
+  }
+
   // Simulate real-time alerts
   useEffect(() => {
     const liveAlerts: Array<{ message: string; type: SystemAlert['type'] }> = [
@@ -264,6 +291,95 @@ export default function AdminDashboard({
       setEmergencyLoading(false)
     }
   }
+
+  const handleActivateVIP = () => {
+    if (!vipFrom || !vipTo) return
+    // Build a simulated corridor: from → up to 2 intermediate intersections → to
+    const fromIdx = intersections.findIndex((i) => i.name === vipFrom)
+    const toIdx = intersections.findIndex((i) => i.name === vipTo)
+    const midpoints = intersections
+      .filter((i) => i.name !== vipFrom && i.name !== vipTo)
+      .slice(Math.min(fromIdx, toIdx), Math.min(fromIdx, toIdx) + 2)
+      .map((i) => i.name)
+    const route = [vipFrom, ...midpoints, vipTo]
+    setVipCorridorRoute(route)
+    setVipActive(true)
+    setVipProgressStep(0)
+    setAlerts((prev) => [
+      {
+        id: `alt-vip-${Date.now()}`,
+        message: `VIP Green Corridor ACTIVATED: ${vipFrom} → ${vipTo}. Signals along route synchronized.`,
+        type: 'warning',
+        timestamp: new Date().toISOString(),
+      },
+      ...prev,
+    ])
+  }
+
+  const handleDeactivateVIP = () => {
+    setVipActive(false)
+    setVipProgressStep(0)
+    setAlerts((prev) => [
+      {
+        id: `alt-vip-end-${Date.now()}`,
+        message: 'VIP Corridor deactivated — normal signal operation resumed.',
+        type: 'info',
+        timestamp: new Date().toISOString(),
+      },
+      ...prev,
+    ])
+  }
+
+  const handleActivateAmbulance = () => {
+    if (!ambulanceRoute) return
+    const waypoints = AMBULANCE_WAYPOINTS[ambulanceRoute] ?? [ambulanceRoute.split(' → ')[0] ?? ambulanceRoute]
+    setAmbulanceCorridorRoute(waypoints)
+    setAmbulanceActive(true)
+    setAmbulanceProgressStep(0)
+    setAlerts((prev) => [
+      {
+        id: `alt-amb-${Date.now()}`,
+        message: `AMBULANCE PRIORITY ACTIVE on ${ambulanceRoute}. Route cleared — signals turning green.`,
+        type: 'error',
+        timestamp: new Date().toISOString(),
+      },
+      ...prev,
+    ])
+  }
+
+  const handleDeactivateAmbulance = () => {
+    setAmbulanceActive(false)
+    setAmbulanceProgressStep(0)
+    setAlerts((prev) => [
+      {
+        id: `alt-amb-end-${Date.now()}`,
+        message: 'Ambulance priority corridor cleared — normal operation resumed.',
+        type: 'info',
+        timestamp: new Date().toISOString(),
+      },
+      ...prev,
+    ])
+  }
+
+  // Simulate VIP corridor progress
+  useEffect(() => {
+    if (!vipActive) return
+    const total = vipCorridorRoute.length
+    const interval = setInterval(() => {
+      setVipProgressStep((prev) => (prev < total - 1 ? prev + 1 : prev))
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [vipActive, vipCorridorRoute.length])
+
+  // Simulate ambulance priority progress
+  useEffect(() => {
+    if (!ambulanceActive) return
+    const total = ambulanceCorridorRoute.length
+    const interval = setInterval(() => {
+      setAmbulanceProgressStep((prev) => (prev < total - 1 ? prev + 1 : prev))
+    }, 2500)
+    return () => clearInterval(interval)
+  }, [ambulanceActive, ambulanceCorridorRoute.length])
 
   const handleIncidentStatusChange = useCallback(
     (id: string, status: Incident['status']) => {
@@ -442,6 +558,7 @@ export default function AdminDashboard({
             { value: 'monitoring', label: 'Monitoring', icon: BarChart2 },
             { value: 'analytics', label: 'Analytics', icon: TrendingUp },
             { value: 'ai', label: 'AI Insights', icon: Brain },
+            { value: 'emergency', label: 'Emergency', icon: Siren },
           ].map(({ value, label, icon: Icon }) => (
             <TabsTrigger
               key={value}
@@ -865,6 +982,259 @@ export default function AdminDashboard({
               <TrafficPrediction intersection={selectedIntersection} />
             </>
           )}
+        </TabsContent>
+
+        {/* Emergency Systems Tab */}
+        <TabsContent value="emergency" className="space-y-6 mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            {/* VIP Corridor System */}
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-yellow-400" />
+                  VIP Corridor System
+                  {vipActive && (
+                    <span className="ml-auto flex items-center gap-1 text-[10px] bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 px-2 py-0.5 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                      ACTIVE
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-[11px] text-slate-400">
+                  Create a green corridor for VIP movement. AI will synchronize signals sequentially along the route,
+                  temporarily diverting cross-traffic.
+                </p>
+
+                {!vipActive ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] text-slate-400 mb-1 block">From Intersection</label>
+                      <select
+                        value={vipFrom}
+                        onChange={(e) => setVipFrom(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500/50"
+                      >
+                        <option value="">Select origin…</option>
+                        {intersections.map((i) => (
+                          <option key={i.id} value={i.name}>{i.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 mb-1 block">To Intersection</label>
+                      <select
+                        value={vipTo}
+                        onChange={(e) => setVipTo(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500/50"
+                      >
+                        <option value="">Select destination…</option>
+                        {intersections.map((i) => (
+                          <option key={i.id} value={i.name}>{i.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={handleActivateVIP}
+                      disabled={!vipFrom || !vipTo}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-yellow-500/15 border border-yellow-500/40 text-yellow-300 text-xs font-medium hover:bg-yellow-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Crown className="w-3.5 h-3.5" />
+                      Activate VIP Corridor
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
+                      <div className="flex items-center gap-2 text-yellow-300 text-xs font-semibold mb-2">
+                        <Navigation className="w-3.5 h-3.5" />
+                        {vipFrom} <ArrowRight className="w-3 h-3" /> {vipTo}
+                      </div>
+                      <div className="space-y-1.5">
+                        {vipCorridorRoute.map((point, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs">
+                            {idx <= vipProgressStep ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                            ) : (
+                              <div className="w-3.5 h-3.5 rounded-full border border-slate-600 flex-shrink-0" />
+                            )}
+                            <span className={idx <= vipProgressStep ? 'text-green-400 font-medium' : 'text-slate-500'}>
+                              {point}
+                            </span>
+                            {idx === vipProgressStep && (
+                              <span className="text-[10px] bg-green-500/15 border border-green-500/30 text-green-400 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">
+                                GREEN
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleDeactivateVIP}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-medium hover:bg-red-500/25 transition-all"
+                    >
+                      <Ban className="w-3.5 h-3.5" />
+                      Deactivate Corridor
+                    </button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Ambulance Priority Routing */}
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                  <Ambulance className="w-4 h-4 text-red-400" />
+                  Ambulance Priority Routing
+                  {ambulanceActive && (
+                    <span className="ml-auto flex items-center gap-1 text-[10px] bg-red-500/15 border border-red-500/30 text-red-400 px-2 py-0.5 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                      ACTIVE
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-[11px] text-slate-400">
+                  Activate emergency vehicle priority. Signals ahead automatically turn green, cross-traffic
+                  is stopped, and nearby navigation users receive rerouting alerts.
+                </p>
+
+                {!ambulanceActive ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] text-slate-400 mb-1 block">Emergency Vehicle Route</label>
+                      <select
+                        value={ambulanceRoute}
+                        onChange={(e) => setAmbulanceRoute(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-red-500/50"
+                      >
+                        <option value="">Select route…</option>
+                        <option value="Gomti Nagar → King George Medical University">Gomti Nagar → KGMU</option>
+                        <option value="Charbagh → Balrampur Hospital">Charbagh → Balrampur Hospital</option>
+                        <option value="Alambagh → Ram Manohar Lohia Hospital">Alambagh → RML Hospital</option>
+                        <option value="Indira Nagar → Civil Hospital">Indira Nagar → Civil Hospital</option>
+                      </select>
+                    </div>
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-300 flex items-start gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      All signals along the route will turn GREEN and cross-traffic will be halted immediately.
+                    </div>
+                    <button
+                      onClick={handleActivateAmbulance}
+                      disabled={!ambulanceRoute}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-medium hover:bg-red-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Siren className="w-3.5 h-3.5" />
+                      Activate Emergency Priority
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30">
+                      <div className="flex items-center gap-2 text-red-300 text-xs font-semibold mb-2">
+                        <Ambulance className="w-3.5 h-3.5" />
+                        {ambulanceRoute}
+                      </div>
+                      <div className="space-y-1.5">
+                        {ambulanceCorridorRoute.map((point, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs">
+                            {idx < ambulanceProgressStep ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                            ) : idx === ambulanceProgressStep ? (
+                              <Ambulance className="w-3.5 h-3.5 text-red-400 flex-shrink-0 animate-pulse" />
+                            ) : (
+                              <div className="w-3.5 h-3.5 rounded-full border border-slate-600 flex-shrink-0" />
+                            )}
+                            <span className={
+                              idx < ambulanceProgressStep
+                                ? 'text-slate-500 line-through'
+                                : idx === ambulanceProgressStep
+                                ? 'text-red-400 font-medium'
+                                : 'text-slate-400'
+                            }>
+                              {point}
+                            </span>
+                            {idx === ambulanceProgressStep && (
+                              <span className="text-[10px] bg-green-500/15 border border-green-500/30 text-green-400 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">
+                                CLEAR
+                              </span>
+                            )}
+                            {idx > ambulanceProgressStep && (
+                              <span className="text-[10px] bg-red-500/15 border border-red-500/30 text-red-400 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">
+                                STOP
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleDeactivateAmbulance}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 text-xs font-medium hover:text-slate-200 hover:bg-slate-700 transition-all"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      Clear Emergency Route
+                    </button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Smart Traffic Diversion — full width below */}
+            <Card className="lg:col-span-2 bg-slate-900 border-slate-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                  <Route className="w-4 h-4 text-cyan-400" />
+                  Smart Traffic Diversion
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-[11px] text-slate-400 mb-4">
+                  AI detects heavy congestion and suggests alternate routes. Activate a diversion to automatically
+                  redirect navigation users and adjust signal timings.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {DIVERSION_ROUTES.map((route) => (
+                    <div
+                      key={route.id}
+                      className={`p-3 rounded-xl border transition-all ${
+                        activeDiversion === route.id
+                          ? 'bg-cyan-500/15 border-cyan-500/40'
+                          : 'bg-slate-800/50 border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <p className="text-xs font-semibold text-slate-200">{route.name}</p>
+                        {activeDiversion === route.id && (
+                          <span className="text-[10px] bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 px-1.5 py-0.5 rounded-full flex-shrink-0 ml-1">
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mb-3">
+                        {route.from} → {route.to}
+                      </p>
+                      <button
+                        onClick={() => handleDiversion(route.id)}
+                        className={`w-full py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
+                          activeDiversion === route.id
+                            ? 'bg-red-500/15 border-red-500/40 text-red-300 hover:bg-red-500/25'
+                            : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20'
+                        }`}
+                      >
+                        {activeDiversion === route.id ? 'Deactivate' : 'Activate Diversion'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
