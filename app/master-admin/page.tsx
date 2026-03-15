@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { signInWithGoogle, signInWithEmail, logOut } from '@/lib/firebase/auth'
+import { signInWithGoogle, signInWithEmail, logOut, checkAdminStatus } from '@/lib/firebase/auth'
 import { useAuth } from '@/lib/firebase/auth-context'
 import { MOCK_INTERSECTIONS } from '@/lib/mock-data'
 import AdminDashboard from '@/components/dashboard/admin-dashboard'
@@ -10,9 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 
-// Pre-approved admin email addresses
-// To add more admins, set NEXT_PUBLIC_ADMIN_EMAILS as a comma-separated list in your environment.
-// Example: NEXT_PUBLIC_ADMIN_EMAILS="admin@city.gov,traffic.control@city.gov"
+// Static fallback: pre-approved admin email addresses.
+// To add more admins via environment variable, set NEXT_PUBLIC_ADMIN_EMAILS as a
+// comma-separated list. Example: NEXT_PUBLIC_ADMIN_EMAILS="admin@city.gov,traffic.control@city.gov"
+// For dynamic admin management, add a document to the Firestore `admins` collection
+// where the document ID is the user's Firebase UID or their lowercased email address.
 const DEFAULT_ADMIN_EMAILS: string[] = [
   'admin@city.gov',
   'traffic.control@city.gov',
@@ -22,7 +24,7 @@ const ADMIN_EMAILS: string[] = process.env.NEXT_PUBLIC_ADMIN_EMAILS
   ? process.env.NEXT_PUBLIC_ADMIN_EMAILS.split(',').map((e) => e.trim().toLowerCase())
   : DEFAULT_ADMIN_EMAILS
 
-function isAdminEmail(email: string | null | undefined): boolean {
+function isStaticAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false
   return ADMIN_EMAILS.includes(email.toLowerCase())
 }
@@ -36,14 +38,45 @@ export default function MasterAdminPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [logoutLoading, setLogoutLoading] = useState(false)
+  // true = confirmed admin, false = confirmed non-admin, null = check in progress
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
 
-  // Redirect non-admin logged-in users back to home
+  // Verify admin status whenever the authenticated user changes.
+  // Checks the Firestore `admins` collection first, then falls back to the
+  // static email whitelist. This allows any Firebase-registered admin to log in
+  // without requiring their email to be hardcoded.
   useEffect(() => {
-    if (!loading && user && !isAdminEmail(user.email)) {
+    if (loading) return
+
+    if (!user) {
+      setIsAdmin(null)
+      return
+    }
+
+    // Short-circuit with static list to avoid an unnecessary Firestore read
+    if (isStaticAdminEmail(user.email)) {
+      setIsAdmin(true)
+      return
+    }
+
+    setIsAdmin(null) // show loading while we check Firestore
+    checkAdminStatus(user.uid, user.email)
+      .then((result) => {
+        setIsAdmin(result)
+      })
+      .catch(() => {
+        // Treat an unexpected rejection as non-admin so the UI doesn't stay stuck
+        setIsAdmin(false)
+      })
+  }, [user, loading])
+
+  // Redirect confirmed non-admins back to home after a short delay
+  useEffect(() => {
+    if (!loading && user && isAdmin === false) {
       const timer = setTimeout(() => router.push('/'), 3000)
       return () => clearTimeout(timer)
     }
-  }, [user, loading, router])
+  }, [user, loading, isAdmin, router])
 
   const handleGoogleSignIn = async () => {
     setError(null)
@@ -78,8 +111,8 @@ export default function MasterAdminPage() {
     setLogoutLoading(false)
   }
 
-  // Loading state
-  if (loading) {
+  // Loading state — wait for both Firebase auth and Firestore admin check
+  if (loading || (user && isAdmin === null)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -90,8 +123,8 @@ export default function MasterAdminPage() {
     )
   }
 
-  // Logged in but not an admin email
-  if (user && !isAdminEmail(user.email)) {
+  // Logged in but not an admin
+  if (user && isAdmin === false) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-md text-center space-y-6">
