@@ -2,7 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { signInWithGoogle, signInWithEmail, logOut, checkAdminStatus } from '@/lib/firebase/auth'
+import {
+  signInWithGoogle,
+  signInWithEmail,
+  logOut,
+  checkAdminStatus,
+  checkMasterAdminExists,
+  createMasterAdmin,
+} from '@/lib/firebase/auth'
 import { useAuth } from '@/lib/firebase/auth-context'
 import { MOCK_INTERSECTIONS } from '@/lib/mock-data'
 import AdminDashboard from '@/components/dashboard/admin-dashboard'
@@ -40,6 +47,22 @@ export default function MasterAdminPage() {
   const [logoutLoading, setLogoutLoading] = useState(false)
   // true = confirmed admin, false = confirmed non-admin, null = check in progress
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
+
+  // Setup wizard state
+  // null = checking whether setup is needed, true = first-run setup required, false = setup done
+  const [setupRequired, setSetupRequired] = useState<boolean | null>(null)
+  const [setupName, setSetupName] = useState('')
+  const [setupEmail, setSetupEmail] = useState('')
+  const [setupPassword, setSetupPassword] = useState('')
+  const [setupConfirmPassword, setSetupConfirmPassword] = useState('')
+  const [setupLoading, setSetupLoading] = useState(false)
+  const [setupError, setSetupError] = useState<string | null>(null)
+
+  // Check whether a master admin already exists (runs once when auth is resolved and no user is signed in)
+  useEffect(() => {
+    if (loading || user) return
+    checkMasterAdminExists().then((exists) => setSetupRequired(!exists))
+  }, [loading, user])
 
   // Verify admin status whenever the authenticated user changes.
   // Checks the Firestore `admins` collection first, then falls back to the
@@ -111,8 +134,41 @@ export default function MasterAdminPage() {
     setLogoutLoading(false)
   }
 
-  // Loading state — wait for both Firebase auth and Firestore admin check
-  if (loading || (user && isAdmin === null)) {
+  const handleSetup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSetupError(null)
+
+    if (setupPassword !== setupConfirmPassword) {
+      setSetupError('Passwords do not match.')
+      return
+    }
+    if (setupPassword.length < 8) {
+      setSetupError('Password must be at least 8 characters.')
+      return
+    }
+
+    setSetupLoading(true)
+    try {
+      // Double-check that an admin was not created in the meantime
+      const alreadyExists = await checkMasterAdminExists()
+      if (alreadyExists) {
+        setSetupRequired(false)
+        return
+      }
+      await createMasterAdmin(setupEmail, setupPassword, setupName)
+      // The auth state change will be picked up by useAuth → user will be set
+      // and the admin status check will grant access.
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create master admin account'
+      setSetupError(msg.replace('Firebase: ', '').replace(/ \(auth\/.*\)\.?/, ''))
+    } finally {
+      setSetupLoading(false)
+    }
+  }
+
+  // ── Loading state ──────────────────────────────────────────────────────────
+  // Wait for Firebase auth resolution, Firestore admin check, and setup check
+  if (loading || (user && isAdmin === null) || (!user && setupRequired === null)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -123,7 +179,7 @@ export default function MasterAdminPage() {
     )
   }
 
-  // Logged in but not an admin
+  // ── Logged in but not an admin ─────────────────────────────────────────────
   if (user && isAdmin === false) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -153,7 +209,113 @@ export default function MasterAdminPage() {
     )
   }
 
-  // Not logged in — show login options
+  // ── First-run setup wizard (no master admin exists yet) ────────────────────
+  if (!user && setupRequired) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="border border-border rounded-2xl p-8 shadow-lg bg-card">
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl mb-4 shadow-md shadow-cyan-500/20">
+                <span className="text-white font-bold text-xl">D</span>
+              </div>
+              <h1 className="text-2xl font-bold text-foreground">Setup Master Admin</h1>
+              <p className="text-muted-foreground text-sm mt-1">DRISHTI Traffic Control Center</p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 text-xs text-amber-800">
+              <p className="font-semibold mb-1">⚙️ First-Time Setup</p>
+              <p>No admin account found. Create the master admin account to get started. This can only be done once.</p>
+            </div>
+
+            {setupError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {setupError}
+              </div>
+            )}
+
+            <form onSubmit={handleSetup} className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Full Name</label>
+                <Input
+                  type="text"
+                  placeholder="Traffic Commissioner"
+                  value={setupName}
+                  onChange={(e) => setSetupName(e.target.value)}
+                  disabled={setupLoading}
+                  required
+                  autoComplete="name"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Email</label>
+                <Input
+                  type="email"
+                  placeholder="admin@city.gov"
+                  value={setupEmail}
+                  onChange={(e) => setSetupEmail(e.target.value)}
+                  disabled={setupLoading}
+                  required
+                  autoComplete="username"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Password</label>
+                <Input
+                  type="password"
+                  placeholder="Min. 8 characters"
+                  value={setupPassword}
+                  onChange={(e) => setSetupPassword(e.target.value)}
+                  disabled={setupLoading}
+                  required
+                  autoComplete="new-password"
+                  minLength={8}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Confirm Password</label>
+                <Input
+                  type="password"
+                  placeholder="Re-enter password"
+                  value={setupConfirmPassword}
+                  onChange={(e) => setSetupConfirmPassword(e.target.value)}
+                  disabled={setupLoading}
+                  required
+                  autoComplete="new-password"
+                  minLength={8}
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={setupLoading}
+                className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold mt-2"
+              >
+                {setupLoading ? 'Creating account…' : 'Create Master Admin'}
+              </Button>
+            </form>
+
+            <div className="mt-5 text-center">
+              <button
+                type="button"
+                onClick={() => setSetupRequired(false)}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+              >
+                Already have an account? Sign in
+              </button>
+            </div>
+
+            <div className="mt-3 text-center">
+              <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                ← Back to Citizen Dashboard
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Login form (admin already exists or user dismissed setup) ──────────────
   if (!user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -240,7 +402,17 @@ export default function MasterAdminPage() {
               {googleLoading ? 'Signing in…' : 'Sign in with Google'}
             </Button>
 
-            <div className="mt-6 text-center">
+            <div className="mt-5 text-center">
+              <button
+                type="button"
+                onClick={() => setSetupRequired(true)}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+              >
+                First time? Create master admin account
+              </button>
+            </div>
+
+            <div className="mt-3 text-center">
               <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                 ← Back to Citizen Dashboard
               </Link>
@@ -251,7 +423,7 @@ export default function MasterAdminPage() {
     )
   }
 
-  // Authenticated admin — show admin dashboard
+  // ── Authenticated admin — show admin dashboard ─────────────────────────────
   return (
     <div className="min-h-screen bg-background">
       <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm">
