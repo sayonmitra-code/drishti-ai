@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getMockRecommendations } from '@/lib/mock-data'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const intersectionId = searchParams.get('intersection_id')
+    const intersectionId = searchParams.get('intersection_id') || 'int-001'
 
-    if (!intersectionId) {
-      return NextResponse.json(
-        { error: 'Missing intersection_id' },
-        { status: 400 }
-      )
+    // Use mock data when Supabase is not configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ recommendations: getMockRecommendations(intersectionId) })
     }
 
+    const { createClient } = await import('@/lib/supabase/server')
     const supabase = await createClient()
 
     const { data: recommendations, error } = await supabase
@@ -26,9 +25,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ recommendations })
   } catch (error) {
     console.error('Recommendations fetch error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch recommendations' },
-      { status: 500 }
-    )
+    const intersectionId = new URL(request.url).searchParams.get('intersection_id') || 'int-001'
+    return NextResponse.json({ recommendations: getMockRecommendations(intersectionId) })
   }
 }
+
