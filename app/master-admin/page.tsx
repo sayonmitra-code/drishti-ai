@@ -10,17 +10,20 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
 // Pre-approved admin email addresses
-// In production, manage this list via environment variables or a secure backend
-const ADMIN_EMAILS: string[] = [
+// To add more admins, set NEXT_PUBLIC_ADMIN_EMAILS as a comma-separated list in your environment.
+// Example: NEXT_PUBLIC_ADMIN_EMAILS="admin@city.gov,traffic.control@city.gov"
+const DEFAULT_ADMIN_EMAILS: string[] = [
   'admin@city.gov',
   'traffic.control@city.gov',
-  // Allow any email containing "admin" for easy demo access
-  // Remove this line in a real production deployment
 ]
+
+const ADMIN_EMAILS: string[] = process.env.NEXT_PUBLIC_ADMIN_EMAILS
+  ? process.env.NEXT_PUBLIC_ADMIN_EMAILS.split(',').map((e) => e.trim().toLowerCase())
+  : DEFAULT_ADMIN_EMAILS
 
 function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false
-  return ADMIN_EMAILS.includes(email) || email.includes('admin')
+  return ADMIN_EMAILS.includes(email.toLowerCase())
 }
 
 export default function MasterAdminPage() {
