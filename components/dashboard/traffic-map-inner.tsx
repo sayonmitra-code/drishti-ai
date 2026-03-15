@@ -21,11 +21,32 @@ export interface RouteCoords {
   navActive?: boolean // whether navigation mode is active (shows car marker)
 }
 
+// Internal type for digital twin vehicles
+interface SimVehicle {
+  id: number
+  fromIdx: number
+  toIdx: number
+  progress: number // 0→1
+  speed: number
+}
+
+// Vehicle speed constants (progress per 200ms tick, i.e., fraction of a road segment traveled)
+const SIM_VEHICLE_MIN_SPEED = 0.022   // slowest vehicle
+const SIM_VEHICLE_SPEED_VARIANTS = 6  // number of distinct speed steps
+const SIM_VEHICLE_SPEED_INCREMENT = 0.009 // increment per speed variant
+// Route selection multiplier — distributes vehicles across different next-connections
+// by making each vehicle's "turn preference" unique based on its id
+const ROUTE_SELECTION_MULTIPLIER = 3
+// Default city zoom — level 12 shows all 43 Lucknow intersections within the viewport
+const DEFAULT_CITY_ZOOM_LEVEL = 12
+
 const CONGESTION_COLORS: Record<string, string> = {
   low: '#22c55e',
   medium: '#f97316',
   high: '#ef4444',
 }
+
+const VEHICLE_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899']
 
 // Deterministic congestion based on intersection id
 function getCongestionLevel(id: string): 'low' | 'medium' | 'high' {
@@ -35,17 +56,184 @@ function getCongestionLevel(id: string): 'low' | 'medium' | 'high' {
   return 'low'
 }
 
-// Lucknow road network connections
+// Lucknow road network connections — expanded for 43 localities
 const ROAD_CONNECTIONS: [number, number][] = [
-  [0, 4], // Hazratganj → Aminabad
-  [0, 7], // Hazratganj → Kaiserbagh
-  [1, 4], // Charbagh → Aminabad
-  [2, 1], // Alambagh → Charbagh
-  [3, 5], // Gomti Nagar → Indira Nagar
-  [4, 7], // Aminabad → Kaiserbagh
-  [5, 6], // Indira Nagar → Aliganj
-  [6, 0], // Aliganj → Hazratganj
+  [0, 4],   // Hazratganj → Aminabad
+  [0, 7],   // Hazratganj → Kaiserbagh
+  [0, 22],  // Hazratganj → Civil Lines
+  [0, 23],  // Hazratganj → Dalibagh
+  [1, 4],   // Charbagh → Aminabad
+  [1, 14],  // Charbagh → Amber Ganj
+  [1, 29],  // Charbagh → Lalbagh
+  [2, 1],   // Alambagh → Charbagh
+  [2, 28],  // Alambagh → Kanpur Road
+  [3, 5],   // Gomti Nagar → Indira Nagar
+  [3, 39],  // Gomti Nagar → Vibhuti Khand
+  [4, 7],   // Aminabad → Kaiserbagh
+  [4, 42],  // Aminabad → Wazirganj
+  [5, 6],   // Indira Nagar → Aliganj
+  [5, 26],  // Indira Nagar → Faizabad Road
+  [6, 0],   // Aliganj → Hazratganj
+  [6, 17],  // Aliganj → Nirala Nagar
+  [7, 30],  // Kaiserbagh → Lalbagh
+  [8, 2],   // Aashiana → Alambagh
+  [9, 0],   // Adarsh Nagar → Hazratganj
+  [10, 5],  // Ahmamau → Indira Nagar
+  [11, 2],  // Aishbagh → Alambagh
+  [12, 2],  // Amausi → Alambagh
+  [13, 1],  // Amber Ganj → Charbagh
+  [14, 0],  // Anand Nagar → Hazratganj
+  [15, 8],  // Ashiyana → Aashiana
+  [16, 0],  // Ashok Marg → Hazratganj
+  [17, 6],  // Balaganj → Aliganj
+  [18, 2],  // Banthra → Alambagh
+  [19, 5],  // Bijnaur → Indira Nagar
+  [20, 3],  // Chinhat → Gomti Nagar
+  [21, 22], // Civil Lines → Dalibagh
+  [24, 3],  // Dilkusha → Gomti Nagar
+  [25, 3],  // Faizabad Road → Gomti Nagar
+  [26, 3],  // Jankipuram → Gomti Nagar
+  [27, 1],  // Kalyanpur → Charbagh
+  [28, 2],  // Kanpur Road → Alambagh
+  [29, 0],  // Lalbagh → Hazratganj
+  [30, 0],  // Cantonment → Hazratganj
+  [31, 3],  // Mahanagar → Gomti Nagar
+  [32, 0],  // Nirala Nagar → Hazratganj
+  [33, 0],  // Nishatganj → Hazratganj
+  [34, 1],  // Rajajipuram → Charbagh
+  [35, 2],  // Sarojini Nagar → Alambagh
+  [36, 2],  // Telibagh → Alambagh
+  [37, 1],  // Thakurganj → Charbagh
+  [38, 3],  // Triveni Nagar → Gomti Nagar
+  [39, 3],  // Vibhuti Khand → Gomti Nagar
+  [40, 5],  // Vikas Nagar → Indira Nagar
+  [41, 3],  // Vrindavan Yojana → Gomti Nagar
+  [42, 4],  // Wazirganj → Aminabad
 ]
+
+// Initialize simulated vehicles spread across road connections
+function initSimVehicles(): SimVehicle[] {
+  return Array.from({ length: 48 }, (_, i) => {
+    const connIdx = i % ROAD_CONNECTIONS.length
+    const [fromIdx, toIdx] = ROAD_CONNECTIONS[connIdx]
+    return {
+      id: i,
+      fromIdx,
+      toIdx,
+      progress: i / 48, // stagger starting positions along each connection
+      speed: SIM_VEHICLE_MIN_SPEED + (i % SIM_VEHICLE_SPEED_VARIANTS) * SIM_VEHICLE_SPEED_INCREMENT,
+    }
+  })
+}
+
+// Digital Traffic Twin — animated vehicles moving along the road network
+function DigitalTwinVehicles({ intersections }: { intersections: Intersection[] }) {
+  const [vehicles, setVehicles] = useState<SimVehicle[]>(initSimVehicles)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVehicles((prev) =>
+        prev.map((v) => {
+          let { fromIdx, toIdx, progress } = v
+          progress += v.speed
+
+          if (progress >= 1) {
+            // Find connected road segments from the current destination
+            const nextConns = ROAD_CONNECTIONS.filter(
+              ([f, t]) => f === toIdx || t === toIdx
+            )
+            if (nextConns.length > 0) {
+              // Deterministic pick based on vehicle id to avoid re-renders with Math.random
+              const pick = nextConns[(v.id * ROUTE_SELECTION_MULTIPLIER + 1) % nextConns.length]
+              fromIdx = pick[0] === toIdx ? pick[0] : pick[1]
+              toIdx = pick[0] === toIdx ? pick[1] : pick[0]
+            } else {
+              // No outgoing connections — reverse direction
+              const tmp = fromIdx
+              fromIdx = toIdx
+              toIdx = tmp
+            }
+            progress = 0
+          }
+
+          return { ...v, fromIdx, toIdx, progress }
+        })
+      )
+    }, 200)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <>
+      {vehicles.map((v) => {
+        const from = intersections[v.fromIdx]
+        const to = intersections[v.toIdx]
+        if (!from || !to) return null
+
+        const fromLat = parseFloat(from.latitude)
+        const fromLng = parseFloat(from.longitude)
+        const toLat = parseFloat(to.latitude)
+        const toLng = parseFloat(to.longitude)
+
+        if (isNaN(fromLat) || isNaN(fromLng) || isNaN(toLat) || isNaN(toLng)) return null
+
+        const lat = fromLat + (toLat - fromLat) * v.progress
+        const lng = fromLng + (toLng - fromLng) * v.progress
+        const color = VEHICLE_COLORS[v.id % VEHICLE_COLORS.length]
+
+        return (
+          <CircleMarker
+            key={`twin-${v.id}`}
+            center={[lat, lng]}
+            radius={3.5}
+            pathOptions={{
+              color: '#0f172a',
+              weight: 0.8,
+              fillColor: color,
+              fillOpacity: 0.9,
+            }}
+          />
+        )
+      })}
+    </>
+  )
+}
+
+// AI Predictive Heatmap — gradient congestion circles around intersections
+function PredictiveHeatmap({ intersections }: { intersections: Intersection[] }) {
+  const hour = new Date().getHours()
+  const isPeak = (hour >= 8 && hour <= 10) || (hour >= 17 && hour <= 21)
+
+  return (
+    <>
+      {intersections.map((intersection) => {
+        const hash = intersection.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+        const base = hash % 3 // 0=low, 1=medium, 2=high
+        // Escalate medium→high during peak hours
+        const level = isPeak && base === 1 ? 2 : base
+
+        if (level === 0) return null // skip low congestion — nothing to show
+
+        const lat = parseFloat(intersection.latitude)
+        const lng = parseFloat(intersection.longitude)
+        if (isNaN(lat) || isNaN(lng)) return null
+
+        const color = level === 2 ? '#ef4444' : '#f97316'
+        const radius = level === 2 ? 650 : 420
+        const opacity = level === 2 ? 0.18 : 0.11
+
+        return (
+          <Circle
+            key={`hm-${intersection.id}`}
+            center={[lat, lng]}
+            radius={radius}
+            pathOptions={{ color, fillColor: color, fillOpacity: opacity, weight: 0 }}
+          />
+        )
+      })}
+    </>
+  )
+}
 
 function MapBounds({ intersections, routeCoords }: { intersections: Intersection[]; routeCoords?: RouteCoords }) {
   const map = useMap()
@@ -147,7 +335,7 @@ function CarNavigationMarker({ routeCoords }: { routeCoords: RouteCoords }) {
   return (
     <Marker position={position} icon={getCarIcon()}>
       <Popup>
-        <div style={{ fontSize: 12, fontWeight: 600 }}>🚗 Your vehicle</div>
+        <div style={{ fontSize: 12, fontWeight: 600 }}>Your vehicle</div>
       </Popup>
     </Marker>
   )
@@ -158,10 +346,14 @@ export default function LeafletMapInner({
   intersections,
   onSelectIntersection,
   routeCoords,
+  showDigitalTwin = false,
+  showHeatmap = false,
 }: {
   intersections: Intersection[]
   onSelectIntersection: (intersection: Intersection) => void
   routeCoords?: RouteCoords
+  showDigitalTwin?: boolean
+  showHeatmap?: boolean
 }) {
   // Default center: Lucknow, India
   const defaultCenter: [number, number] = [26.8467, 80.9462]
@@ -175,8 +367,8 @@ export default function LeafletMapInner({
   return (
     <MapContainer
       center={defaultCenter}
-      zoom={13}
-      style={{ height: '500px', width: '100%', borderRadius: '0 0 0.75rem 0.75rem' }}
+      zoom={DEFAULT_CITY_ZOOM_LEVEL}
+      style={{ height: '580px', width: '100%', borderRadius: '0 0 0.75rem 0.75rem' }}
       scrollWheelZoom={true}
     >
       <TileLayer
@@ -185,6 +377,9 @@ export default function LeafletMapInner({
       />
 
       <MapBounds intersections={validIntersections} routeCoords={routeCoords} />
+
+      {/* AI Predictive Heatmap — shown when toggled on */}
+      {showHeatmap && <PredictiveHeatmap intersections={validIntersections} />}
 
       {/* Route polyline */}
       {routeCoords && routeCoords.coordinates.length > 1 && (
@@ -209,7 +404,7 @@ export default function LeafletMapInner({
             radius={8}
             pathOptions={{ color: '#16a34a', fillColor: '#22c55e', fillOpacity: 1, weight: 2 }}
           >
-            <Popup><div style={{ fontSize: 12, fontWeight: 700 }}>🟢 Start</div></Popup>
+            <Popup><div style={{ fontSize: 12, fontWeight: 700 }}>Start</div></Popup>
           </CircleMarker>
           {/* Destination marker */}
           <CircleMarker
@@ -217,7 +412,7 @@ export default function LeafletMapInner({
             radius={8}
             pathOptions={{ color: '#dc2626', fillColor: '#ef4444', fillOpacity: 1, weight: 2 }}
           >
-            <Popup><div style={{ fontSize: 12, fontWeight: 700 }}>🔴 Destination</div></Popup>
+            <Popup><div style={{ fontSize: 12, fontWeight: 700 }}>Destination</div></Popup>
           </CircleMarker>
         </>
       )}
@@ -248,7 +443,7 @@ export default function LeafletMapInner({
         )
       })}
 
-      {/* Congestion heatmap circles */}
+      {/* Congestion heatmap circles (existing — high congestion zones) */}
       {validIntersections.map((intersection) => {
         const congestion = getCongestionLevel(intersection.id)
         if (congestion !== 'high') return null
@@ -325,7 +520,7 @@ export default function LeafletMapInner({
                       fontSize: 11,
                     }}
                   >
-                    ⏱ {timer}s
+                    {timer}s
                   </span>
                   <span
                     style={{
@@ -336,15 +531,18 @@ export default function LeafletMapInner({
                       fontSize: 11,
                     }}
                   >
-                    🚗 {vehicles}
+                    {vehicles} vehicles
                   </span>
                 </div>
-                <p style={{ fontSize: 11, color: '#6b7280', fontStyle: 'italic' }}>🤖 AI: {aiRec}</p>
+                <p style={{ fontSize: 11, color: '#6b7280', fontStyle: 'italic' }}>AI: {aiRec}</p>
               </div>
             </Popup>
           </CircleMarker>
         )
       })}
+
+      {/* Digital Traffic Twin — simulated moving vehicles (shown when toggled on) */}
+      {showDigitalTwin && <DigitalTwinVehicles intersections={validIntersections} />}
     </MapContainer>
   )
 }
