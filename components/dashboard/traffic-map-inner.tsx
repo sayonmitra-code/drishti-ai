@@ -310,27 +310,39 @@ function getCarIcon(): L.DivIcon {
 // Animated car marker that moves along the route
 function CarNavigationMarker({ routeCoords }: { routeCoords: RouteCoords }) {
   const [posIndex, setPosIndex] = useState(0)
+  // Track the coordinates array reference separately so position is only reset
+  // when the actual route changes, not when navActive flag toggles or the
+  // parent re-renders and creates a new wrapper object.
+  const prevCoordsRef = useRef<[number, number][] | null>(null)
+
+  const coords = routeCoords.coordinates
+  const navActive = routeCoords.navActive
 
   useEffect(() => {
-    if (!routeCoords.navActive || routeCoords.coordinates.length === 0) return
-    setPosIndex(0)
-    const total = routeCoords.coordinates.length
-    // Advance every ~200ms to simulate movement
+    if (!navActive || coords.length === 0) return
+
+    // Reset position only when a new route is loaded
+    if (prevCoordsRef.current !== coords) {
+      prevCoordsRef.current = coords
+      setPosIndex(0)
+    }
+
+    const total = coords.length
+    // Advance one step per tick; step size scales so the full route takes ~200 ticks (40 seconds).
+    // For short routes the step is 1; for long routes it proportionally increases.
+    const STEP = Math.max(1, Math.ceil(total / 200))
     const interval = setInterval(() => {
       setPosIndex((prev) => {
-        if (prev >= total - 1) {
-          clearInterval(interval)
-          return prev
-        }
-        return prev + 1
+        const next = prev + STEP
+        return next >= total - 1 ? total - 1 : next
       })
     }, 200)
     return () => clearInterval(interval)
-  }, [routeCoords])
+  }, [navActive, coords])
 
-  if (!routeCoords.navActive || routeCoords.coordinates.length === 0) return null
+  if (!navActive || coords.length === 0) return null
 
-  const position = routeCoords.coordinates[Math.min(posIndex, routeCoords.coordinates.length - 1)]
+  const position = coords[Math.min(posIndex, coords.length - 1)]
 
   return (
     <Marker position={position} icon={getCarIcon()}>
