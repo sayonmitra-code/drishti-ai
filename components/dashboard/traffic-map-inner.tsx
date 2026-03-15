@@ -35,16 +35,59 @@ function getCongestionLevel(id: string): 'low' | 'medium' | 'high' {
   return 'low'
 }
 
-// Lucknow road network connections
+// Lucknow road network connections — expanded for 43 localities
 const ROAD_CONNECTIONS: [number, number][] = [
-  [0, 4], // Hazratganj → Aminabad
-  [0, 7], // Hazratganj → Kaiserbagh
-  [1, 4], // Charbagh → Aminabad
-  [2, 1], // Alambagh → Charbagh
-  [3, 5], // Gomti Nagar → Indira Nagar
-  [4, 7], // Aminabad → Kaiserbagh
-  [5, 6], // Indira Nagar → Aliganj
-  [6, 0], // Aliganj → Hazratganj
+  [0, 4],   // Hazratganj → Aminabad
+  [0, 7],   // Hazratganj → Kaiserbagh
+  [0, 22],  // Hazratganj → Civil Lines
+  [0, 23],  // Hazratganj → Dalibagh
+  [1, 4],   // Charbagh → Aminabad
+  [1, 14],  // Charbagh → Amber Ganj
+  [1, 29],  // Charbagh → Lalbagh
+  [2, 1],   // Alambagh → Charbagh
+  [2, 28],  // Alambagh → Kanpur Road
+  [3, 5],   // Gomti Nagar → Indira Nagar
+  [3, 39],  // Gomti Nagar → Vibhuti Khand
+  [4, 7],   // Aminabad → Kaiserbagh
+  [4, 42],  // Aminabad → Wazirganj
+  [5, 6],   // Indira Nagar → Aliganj
+  [5, 26],  // Indira Nagar → Faizabad Road
+  [6, 0],   // Aliganj → Hazratganj
+  [6, 17],  // Aliganj → Nirala Nagar
+  [7, 30],  // Kaiserbagh → Lalbagh
+  [8, 2],   // Aashiana → Alambagh
+  [9, 0],   // Adarsh Nagar → Hazratganj
+  [10, 5],  // Ahmamau → Indira Nagar
+  [11, 2],  // Aishbagh → Alambagh
+  [12, 2],  // Amausi → Alambagh
+  [13, 1],  // Amber Ganj → Charbagh
+  [14, 0],  // Anand Nagar → Hazratganj
+  [15, 8],  // Ashiyana → Aashiana
+  [16, 0],  // Ashok Marg → Hazratganj
+  [17, 6],  // Balaganj → Aliganj
+  [18, 2],  // Banthra → Alambagh
+  [19, 5],  // Bijnaur → Indira Nagar
+  [20, 3],  // Chinhat → Gomti Nagar
+  [21, 22], // Civil Lines → Dalibagh
+  [24, 3],  // Dilkusha → Gomti Nagar
+  [25, 3],  // Faizabad Road → Gomti Nagar
+  [26, 3],  // Jankipuram → Gomti Nagar
+  [27, 1],  // Kalyanpur → Charbagh
+  [28, 2],  // Kanpur Road → Alambagh
+  [29, 0],  // Lalbagh → Hazratganj
+  [30, 0],  // Cantonment → Hazratganj
+  [31, 3],  // Mahanagar → Gomti Nagar
+  [32, 0],  // Nirala Nagar → Hazratganj
+  [33, 0],  // Nishatganj → Hazratganj
+  [34, 1],  // Rajajipuram → Charbagh
+  [35, 2],  // Sarojini Nagar → Alambagh
+  [36, 2],  // Telibagh → Alambagh
+  [37, 1],  // Thakurganj → Charbagh
+  [38, 3],  // Triveni Nagar → Gomti Nagar
+  [39, 3],  // Vibhuti Khand → Gomti Nagar
+  [40, 5],  // Vikas Nagar → Indira Nagar
+  [41, 3],  // Vrindavan Yojana → Gomti Nagar
+  [42, 4],  // Wazirganj → Aminabad
 ]
 
 function MapBounds({ intersections, routeCoords }: { intersections: Intersection[]; routeCoords?: RouteCoords }) {
@@ -147,7 +190,7 @@ function CarNavigationMarker({ routeCoords }: { routeCoords: RouteCoords }) {
   return (
     <Marker position={position} icon={getCarIcon()}>
       <Popup>
-        <div style={{ fontSize: 12, fontWeight: 600 }}>🚗 Your vehicle</div>
+        <div style={{ fontSize: 12, fontWeight: 600 }}>Your vehicle</div>
       </Popup>
     </Marker>
   )
@@ -175,8 +218,8 @@ export default function LeafletMapInner({
   return (
     <MapContainer
       center={defaultCenter}
-      zoom={13}
-      style={{ height: '500px', width: '100%', borderRadius: '0 0 0.75rem 0.75rem' }}
+      zoom={12}
+      style={{ height: '520px', width: '100%', borderRadius: '0 0 0.75rem 0.75rem' }}
       scrollWheelZoom={true}
     >
       <TileLayer
@@ -209,7 +252,7 @@ export default function LeafletMapInner({
             radius={8}
             pathOptions={{ color: '#16a34a', fillColor: '#22c55e', fillOpacity: 1, weight: 2 }}
           >
-            <Popup><div style={{ fontSize: 12, fontWeight: 700 }}>🟢 Start</div></Popup>
+            <Popup><div style={{ fontSize: 12, fontWeight: 700 }}>Start</div></Popup>
           </CircleMarker>
           {/* Destination marker */}
           <CircleMarker
@@ -217,7 +260,7 @@ export default function LeafletMapInner({
             radius={8}
             pathOptions={{ color: '#dc2626', fillColor: '#ef4444', fillOpacity: 1, weight: 2 }}
           >
-            <Popup><div style={{ fontSize: 12, fontWeight: 700 }}>🔴 Destination</div></Popup>
+            <Popup><div style={{ fontSize: 12, fontWeight: 700 }}>Destination</div></Popup>
           </CircleMarker>
         </>
       )}
@@ -325,7 +368,7 @@ export default function LeafletMapInner({
                       fontSize: 11,
                     }}
                   >
-                    ⏱ {timer}s
+                    {timer}s
                   </span>
                   <span
                     style={{
@@ -336,10 +379,10 @@ export default function LeafletMapInner({
                       fontSize: 11,
                     }}
                   >
-                    🚗 {vehicles}
+                    {vehicles} vehicles
                   </span>
                 </div>
-                <p style={{ fontSize: 11, color: '#6b7280', fontStyle: 'italic' }}>🤖 AI: {aiRec}</p>
+                <p style={{ fontSize: 11, color: '#6b7280', fontStyle: 'italic' }}>AI: {aiRec}</p>
               </div>
             </Popup>
           </CircleMarker>
