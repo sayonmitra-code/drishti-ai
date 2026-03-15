@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { signInWithGoogle, logOut } from '@/lib/firebase/auth'
+import { signInWithGoogle, signInWithEmail, logOut } from '@/lib/firebase/auth'
 import { useAuth } from '@/lib/firebase/auth-context'
 import { MOCK_INTERSECTIONS } from '@/lib/mock-data'
 import AdminDashboard from '@/components/dashboard/admin-dashboard'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 
 // Pre-approved admin email addresses
@@ -30,6 +31,9 @@ export default function MasterAdminPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [emailLoading, setEmailLoading] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [logoutLoading, setLogoutLoading] = useState(false)
 
@@ -51,6 +55,20 @@ export default function MasterAdminPage() {
       setError(msg.replace('Firebase: ', '').replace(/ \(auth\/.*\)\.?/, ''))
     } finally {
       setGoogleLoading(false)
+    }
+  }
+
+  const handleEmailSignIn = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setEmailLoading(true)
+    try {
+      await signInWithEmail(email, password)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to sign in'
+      setError(msg.replace('Firebase: ', '').replace(/ \(auth\/.*\)\.?/, ''))
+    } finally {
+      setEmailLoading(false)
     }
   }
 
@@ -102,7 +120,7 @@ export default function MasterAdminPage() {
     )
   }
 
-  // Not logged in — show Google sign-in
+  // Not logged in — show login options
   if (!user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -129,10 +147,54 @@ export default function MasterAdminPage() {
               </div>
             )}
 
+            {/* Email + Password Form */}
+            <form onSubmit={handleEmailSignIn} className="space-y-3 mb-5">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Email</label>
+                <Input
+                  type="email"
+                  placeholder="admin@city.gov"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={emailLoading || googleLoading}
+                  required
+                  autoComplete="username"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Password</label>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={emailLoading || googleLoading}
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={emailLoading || googleLoading}
+                className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold"
+              >
+                {emailLoading ? 'Signing in…' : 'Sign in with Email'}
+              </Button>
+            </form>
+
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-card px-3 text-muted-foreground">or</span>
+              </div>
+            </div>
+
             <Button
               type="button"
               onClick={handleGoogleSignIn}
-              disabled={googleLoading}
+              disabled={googleLoading || emailLoading}
               variant="outline"
               className="w-full font-semibold py-3 h-auto"
             >

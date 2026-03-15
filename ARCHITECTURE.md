@@ -27,7 +27,7 @@ DRISHTI is a full-stack Next.js application deployed on Vercel's edge network. I
             ┌─────────────┼─────────────┐
             ▼             ▼             ▼
      ┌──────────┐  ┌────────────┐  ┌──────────────┐
-     │ Firebase │  │ Google Maps│  │  Supabase    │
+     │ Firebase │  │ Leaflet.js+OpenStreetMap│  │  Supabase    │
      │   Auth   │  │  Platform  │  │  (Optional)  │
      └──────────┘  └────────────┘  └──────────────┘
 ```
@@ -67,20 +67,33 @@ Data Sources (Priority Order):
 1. Supabase PostgreSQL (if configured)
    └── Real intersection data, vehicle counts, signals
 2. Mock Data (lib/mock-data.ts)
-   └── AI-simulated Bengaluru traffic data
+   └── AI-simulated Lucknow traffic data
    └── Hourly pattern generation
    └── Peak hour detection
 ```
 
-### 2.4 Maps Layer
+### 2.4 Maps & Navigation Layer
 
 ```
-Google Maps JavaScript API
-├── Dark-themed map tiles
-├── Traffic Layer (real-time)
-├── Intersection Markers (colored by congestion)
-├── Info Windows (name + congestion status)
-└── Fallback UI (when API key not configured)
+Leaflet.js + OpenStreetMap (free, no API key required)
+├── Default center: Lucknow, India (26.8467°N, 80.9462°E)
+├── OpenStreetMap tile layer
+├── Intersection markers (colored by congestion level)
+├── Route polyline with start/destination markers
+├── Animated car marker for navigation mode
+├── Congestion heatmap circles (high-congestion zones)
+└── Road segment polylines (when no route active)
+
+Geocoding: Nominatim (OpenStreetMap)
+├── India-wide place name resolution
+├── Fallback search (global) for unresolved places
+└── Supports any city/area in India
+
+Routing: OSRM (Open Source Routing Machine)
+├── Driving route calculation
+├── Full route geometry (polyline coordinates)
+├── Turn-by-turn step instructions
+└── Distance and duration estimates
 ```
 
 ---
@@ -123,7 +136,7 @@ drishti-ai/
 │   ├── dashboard/
 │   │   ├── citizen-dashboard.tsx   # Main citizen interface
 │   │   ├── admin-dashboard.tsx     # Admin control panel
-│   │   ├── traffic-map.tsx         # Google Maps integration
+│   │   ├── traffic-map.tsx         # Leaflet.js + OpenStreetMap integration
 │   │   ├── traffic-signals.tsx     # Signal cards with countdown
 │   │   ├── traffic-analytics.tsx   # Recharts line + bar charts
 │   │   ├── ai-recommendations.tsx  # AI suggestion panel
@@ -190,7 +203,7 @@ drishti-ai/
                               └────────────────┘
 ```
 
-### 4.3 Google Maps Integration
+### 4.3 Leaflet.js+OpenStreetMap Integration
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -220,7 +233,7 @@ app/layout.tsx (Server)
         └── DashboardNav (Client — Firebase logout)
         └── Page Content
             ├── CitizenDashboard (Client)
-            │   ├── TrafficMap (Client — Google Maps)
+            │   ├── TrafficMap (Client — Leaflet.js+OpenStreetMap)
             │   ├── TrafficSignals (Client — signal cards)
             │   ├── TrafficAnalytics (Client — Recharts)
             │   └── AIRecommendations (Client — AI panel)
@@ -323,7 +336,7 @@ try {
 - **Static Generation** — Auth pages pre-rendered (`○`) for CDN caching
 - **Dynamic Routes** — Dashboard renders on demand (`ƒ`) for fresh data
 - **Lazy Firebase Initialization** — Firebase SDK loads only on client, never during SSR
-- **Lazy Google Maps** — Maps API loads only when API key is available
+- **Lazy Leaflet.js+OpenStreetMap** — Maps API loads only when API key is available
 - **Mock Data Fallback** — Zero database latency for demo mode
 
 ---
@@ -343,7 +356,7 @@ Vercel Edge Network
     └── HTTPS + Custom Domain
             │
             ├──▶ Firebase Auth (Google Cloud)
-            ├──▶ Google Maps Platform
+            ├──▶ OpenStreetMap + OSRM
             └──▶ Supabase (optional)
 ```
 
