@@ -11,8 +11,6 @@ export default function DashboardNav({ user }: { user: User | null }) {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
-  const isAdmin = user?.email?.includes('admin')
-
   const handleLogout = async () => {
     setLoading(true)
     await logOut()
@@ -23,7 +21,7 @@ export default function DashboardNav({ user }: { user: User | null }) {
     <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
         <div className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
+          <Link href="/dashboard" className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md shadow-cyan-500/20">
               <span className="text-white font-bold text-base">D</span>
             </div>
@@ -38,16 +36,14 @@ export default function DashboardNav({ user }: { user: User | null }) {
               href="/dashboard"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted"
             >
-              {isAdmin ? 'Admin' : 'Citizen'} Dashboard
+              Dashboard
             </Link>
-            {user && (
-              <Link
-                href="/dashboard/admin"
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted"
-              >
-                Control Center
-              </Link>
-            )}
+            <Link
+              href="/dashboard/admin"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted"
+            >
+              Control Center
+            </Link>
             <div className="flex items-center gap-2 pl-3 border-l border-border">
               {user ? (
                 <>
@@ -65,11 +61,18 @@ export default function DashboardNav({ user }: { user: User | null }) {
                   </Button>
                 </>
               ) : (
-                <Link href="/master-admin">
-                  <Button variant="outline" size="sm" className="text-sm">
-                    Admin Login
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link href="/auth/login">
+                    <Button variant="ghost" size="sm" className="text-sm">
+                      Sign in
+                    </Button>
+                  </Link>
+                  <Link href="/auth/sign-up">
+                    <Button size="sm" className="text-sm bg-gradient-to-r from-cyan-500 to-blue-600 text-white">
+                      Sign up
+                    </Button>
+                  </Link>
+                </div>
               )}
             </div>
           </div>
