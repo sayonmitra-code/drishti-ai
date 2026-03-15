@@ -21,11 +21,32 @@ export interface RouteCoords {
   navActive?: boolean // whether navigation mode is active (shows car marker)
 }
 
+// Internal type for digital twin vehicles
+interface SimVehicle {
+  id: number
+  fromIdx: number
+  toIdx: number
+  progress: number // 0→1
+  speed: number
+}
+
+// Vehicle speed constants (progress per 200ms tick, i.e., fraction of a road segment traveled)
+const SIM_VEHICLE_MIN_SPEED = 0.022   // slowest vehicle
+const SIM_VEHICLE_SPEED_VARIANTS = 6  // number of distinct speed steps
+const SIM_VEHICLE_SPEED_INCREMENT = 0.009 // increment per speed variant
+// Route selection multiplier — distributes vehicles across different next-connections
+// by making each vehicle's "turn preference" unique based on its id
+const ROUTE_SELECTION_MULTIPLIER = 3
+// Default city zoom — level 12 shows all 43 Lucknow intersections within the viewport
+const DEFAULT_CITY_ZOOM_LEVEL = 12
+
 const CONGESTION_COLORS: Record<string, string> = {
   low: '#22c55e',
   medium: '#f97316',
   high: '#ef4444',
 }
+
+const VEHICLE_COLORS = ['#3b82f6', '#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899']
 
 // Deterministic congestion based on intersection id
 function getCongestionLevel(id: string): 'low' | 'medium' | 'high' {
@@ -89,6 +110,130 @@ const ROAD_CONNECTIONS: [number, number][] = [
   [41, 3],  // Vrindavan Yojana → Gomti Nagar
   [42, 4],  // Wazirganj → Aminabad
 ]
+
+// Initialize simulated vehicles spread across road connections
+function initSimVehicles(): SimVehicle[] {
+  return Array.from({ length: 48 }, (_, i) => {
+    const connIdx = i % ROAD_CONNECTIONS.length
+    const [fromIdx, toIdx] = ROAD_CONNECTIONS[connIdx]
+    return {
+      id: i,
+      fromIdx,
+      toIdx,
+      progress: i / 48, // stagger starting positions along each connection
+      speed: SIM_VEHICLE_MIN_SPEED + (i % SIM_VEHICLE_SPEED_VARIANTS) * SIM_VEHICLE_SPEED_INCREMENT,
+    }
+  })
+}
+
+// Digital Traffic Twin — animated vehicles moving along the road network
+function DigitalTwinVehicles({ intersections }: { intersections: Intersection[] }) {
+  const [vehicles, setVehicles] = useState<SimVehicle[]>(initSimVehicles)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVehicles((prev) =>
+        prev.map((v) => {
+          let { fromIdx, toIdx, progress } = v
+          progress += v.speed
+
+          if (progress >= 1) {
+            // Find connected road segments from the current destination
+            const nextConns = ROAD_CONNECTIONS.filter(
+              ([f, t]) => f === toIdx || t === toIdx
+            )
+            if (nextConns.length > 0) {
+              // Deterministic pick based on vehicle id to avoid re-renders with Math.random
+              const pick = nextConns[(v.id * ROUTE_SELECTION_MULTIPLIER + 1) % nextConns.length]
+              fromIdx = pick[0] === toIdx ? pick[0] : pick[1]
+              toIdx = pick[0] === toIdx ? pick[1] : pick[0]
+            } else {
+              // No outgoing connections — reverse direction
+              const tmp = fromIdx
+              fromIdx = toIdx
+              toIdx = tmp
+            }
+            progress = 0
+          }
+
+          return { ...v, fromIdx, toIdx, progress }
+        })
+      )
+    }, 200)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <>
+      {vehicles.map((v) => {
+        const from = intersections[v.fromIdx]
+        const to = intersections[v.toIdx]
+        if (!from || !to) return null
+
+        const fromLat = parseFloat(from.latitude)
+        const fromLng = parseFloat(from.longitude)
+        const toLat = parseFloat(to.latitude)
+        const toLng = parseFloat(to.longitude)
+
+        if (isNaN(fromLat) || isNaN(fromLng) || isNaN(toLat) || isNaN(toLng)) return null
+
+        const lat = fromLat + (toLat - fromLat) * v.progress
+        const lng = fromLng + (toLng - fromLng) * v.progress
+        const color = VEHICLE_COLORS[v.id % VEHICLE_COLORS.length]
+
+        return (
+          <CircleMarker
+            key={`twin-${v.id}`}
+            center={[lat, lng]}
+            radius={3.5}
+            pathOptions={{
+              color: '#0f172a',
+              weight: 0.8,
+              fillColor: color,
+              fillOpacity: 0.9,
+            }}
+          />
+        )
+      })}
+    </>
+  )
+}
+
+// AI Predictive Heatmap — gradient congestion circles around intersections
+function PredictiveHeatmap({ intersections }: { intersections: Intersection[] }) {
+  const hour = new Date().getHours()
+  const isPeak = (hour >= 8 && hour <= 10) || (hour >= 17 && hour <= 21)
+
+  return (
+    <>
+      {intersections.map((intersection) => {
+        const hash = intersection.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+        const base = hash % 3 // 0=low, 1=medium, 2=high
+        // Escalate medium→high during peak hours
+        const level = isPeak && base === 1 ? 2 : base
+
+        if (level === 0) return null // skip low congestion — nothing to show
+
+        const lat = parseFloat(intersection.latitude)
+        const lng = parseFloat(intersection.longitude)
+        if (isNaN(lat) || isNaN(lng)) return null
+
+        const color = level === 2 ? '#ef4444' : '#f97316'
+        const radius = level === 2 ? 650 : 420
+        const opacity = level === 2 ? 0.18 : 0.11
+
+        return (
+          <Circle
+            key={`hm-${intersection.id}`}
+            center={[lat, lng]}
+            radius={radius}
+            pathOptions={{ color, fillColor: color, fillOpacity: opacity, weight: 0 }}
+          />
+        )
+      })}
+    </>
+  )
+}
 
 function MapBounds({ intersections, routeCoords }: { intersections: Intersection[]; routeCoords?: RouteCoords }) {
   const map = useMap()
@@ -201,10 +346,14 @@ export default function LeafletMapInner({
   intersections,
   onSelectIntersection,
   routeCoords,
+  showDigitalTwin = false,
+  showHeatmap = false,
 }: {
   intersections: Intersection[]
   onSelectIntersection: (intersection: Intersection) => void
   routeCoords?: RouteCoords
+  showDigitalTwin?: boolean
+  showHeatmap?: boolean
 }) {
   // Default center: Lucknow, India
   const defaultCenter: [number, number] = [26.8467, 80.9462]
@@ -218,8 +367,8 @@ export default function LeafletMapInner({
   return (
     <MapContainer
       center={defaultCenter}
-      zoom={12}
-      style={{ height: '520px', width: '100%', borderRadius: '0 0 0.75rem 0.75rem' }}
+      zoom={DEFAULT_CITY_ZOOM_LEVEL}
+      style={{ height: '580px', width: '100%', borderRadius: '0 0 0.75rem 0.75rem' }}
       scrollWheelZoom={true}
     >
       <TileLayer
@@ -228,6 +377,9 @@ export default function LeafletMapInner({
       />
 
       <MapBounds intersections={validIntersections} routeCoords={routeCoords} />
+
+      {/* AI Predictive Heatmap — shown when toggled on */}
+      {showHeatmap && <PredictiveHeatmap intersections={validIntersections} />}
 
       {/* Route polyline */}
       {routeCoords && routeCoords.coordinates.length > 1 && (
@@ -291,7 +443,7 @@ export default function LeafletMapInner({
         )
       })}
 
-      {/* Congestion heatmap circles */}
+      {/* Congestion heatmap circles (existing — high congestion zones) */}
       {validIntersections.map((intersection) => {
         const congestion = getCongestionLevel(intersection.id)
         if (congestion !== 'high') return null
@@ -388,6 +540,9 @@ export default function LeafletMapInner({
           </CircleMarker>
         )
       })}
+
+      {/* Digital Traffic Twin — simulated moving vehicles (shown when toggled on) */}
+      {showDigitalTwin && <DigitalTwinVehicles intersections={validIntersections} />}
     </MapContainer>
   )
 }

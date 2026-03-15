@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Brain, Car, Activity } from 'lucide-react'
 
 interface Intersection {
   id: string
@@ -49,7 +50,7 @@ export default function IntersectionMonitoring({
   }, [intersection.id, aiMode])
 
   const handleSignalChange = async (signalId: string, newStatus: string) => {
-    if (aiMode) return // In AI mode, signals are auto-managed
+    if (aiMode) return
     try {
       await fetch('/api/signals/update', {
         method: 'POST',
@@ -62,20 +63,42 @@ export default function IntersectionMonitoring({
     }
   }
 
-  const statusStyle: Record<string, { bg: string; border: string; text: string; dot: string }> = {
-    red: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', dot: 'bg-red-500' },
-    yellow: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', dot: 'bg-amber-400' },
-    green: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', dot: 'bg-green-500' },
+  const statusStyle: Record<string, { bg: string; border: string; text: string; dot: string; btn: string }> = {
+    red: {
+      bg: 'bg-red-500/10',
+      border: 'border-red-500/30',
+      text: 'text-red-400',
+      dot: 'bg-red-500',
+      btn: 'bg-red-500/15 border-red-500/30 text-red-400 hover:bg-red-500/25',
+    },
+    yellow: {
+      bg: 'bg-yellow-500/10',
+      border: 'border-yellow-500/30',
+      text: 'text-yellow-400',
+      dot: 'bg-yellow-500',
+      btn: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/25',
+    },
+    green: {
+      bg: 'bg-green-500/10',
+      border: 'border-green-500/30',
+      text: 'text-green-400',
+      dot: 'bg-green-500',
+      btn: 'bg-green-500/15 border-green-500/30 text-green-400 hover:bg-green-500/25',
+    },
   }
 
   return (
-    <Card className="shadow-sm border border-border">
+    <Card className="bg-slate-900 border-slate-800">
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-semibold text-foreground flex items-center justify-between">
-          <span>Signal Monitoring — {intersection.name}</span>
+        <CardTitle className="text-sm font-semibold text-slate-200 flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-cyan-400" />
+            Signal Monitoring — {intersection.name}
+          </span>
           {aiMode && (
-            <span className="text-xs bg-cyan-100 text-cyan-700 border border-cyan-200 px-2 py-0.5 rounded-full font-medium">
-              🤖 AI Controlled
+            <span className="text-[10px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+              <Brain className="w-2.5 h-2.5" />
+              AI Controlled
             </span>
           )}
         </CardTitle>
@@ -98,10 +121,13 @@ export default function IntersectionMonitoring({
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-sm font-semibold text-foreground">{signal.signal_name}</h4>
-                      <p className="text-xs text-muted-foreground mt-0.5">🚗 {count} vehicles queued</p>
+                      <h4 className="text-sm font-semibold text-slate-200">{signal.signal_name}</h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+                        <Car className="w-2.5 h-2.5" />
+                        {count} vehicles queued
+                      </p>
                     </div>
-                    <div className={`w-10 h-10 rounded-full ${style.dot} flex items-center justify-center`}>
+                    <div className={`w-10 h-10 rounded-full ${style.dot} flex items-center justify-center shadow-lg`}>
                       <span className="text-white text-xs font-bold uppercase">
                         {signal.status.charAt(0)}
                       </span>
@@ -109,10 +135,12 @@ export default function IntersectionMonitoring({
                   </div>
 
                   <div className="flex items-center justify-between text-xs">
-                    <span className={`font-medium ${style.text}`}>
+                    <span className={`font-semibold ${style.text}`}>
                       {signal.status.toUpperCase()} — {signal.timing_seconds}s
                     </span>
-                    <span className="text-muted-foreground italic">AI: {aiRec}</span>
+                    <span className="text-slate-500 text-[11px] italic">
+                      AI: {aiRec}
+                    </span>
                   </div>
 
                   {!aiMode && (
@@ -123,7 +151,7 @@ export default function IntersectionMonitoring({
                           <button
                             key={s}
                             onClick={() => handleSignalChange(signal.id, s)}
-                            className={`flex-1 py-1.5 rounded text-xs font-semibold border transition-all ${ss.bg} ${ss.border} ${ss.text} ${signal.status === s ? 'ring-2 ring-offset-1 ring-cyan-400 opacity-100' : 'opacity-60 hover:opacity-90'}`}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-all ${ss.btn} ${signal.status === s ? 'ring-2 ring-offset-2 ring-offset-slate-900 ring-cyan-500/50 opacity-100' : 'opacity-60 hover:opacity-90'}`}
                           >
                             {s.charAt(0).toUpperCase() + s.slice(1)}
                           </button>
@@ -132,8 +160,9 @@ export default function IntersectionMonitoring({
                     </div>
                   )}
                   {aiMode && (
-                    <div className="text-xs text-cyan-700 bg-cyan-50 border border-cyan-100 rounded-lg p-2">
-                      🤖 AI recommendation: {aiRec} — auto-applying
+                    <div className="text-[11px] text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2 flex items-center gap-2">
+                      <Brain className="w-3 h-3 flex-shrink-0" />
+                      AI recommendation: {aiRec} — auto-applying
                     </div>
                   )}
                 </div>

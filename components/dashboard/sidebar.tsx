@@ -34,7 +34,7 @@ const NAV_ITEMS: SidebarItem[] = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Citizen Dashboard', exactMatch: true },
   { href: '/dashboard#navigation', icon: Navigation, label: 'Navigation' },
   { href: '/dashboard#map', icon: Map, label: 'Traffic Map' },
-  { href: '/dashboard#signals', icon: TrafficCone, label: 'Signal Status' },
+  { href: '/dashboard#signals', icon: TrafficCone, label: 'Traffic Signals' },
   { href: '/dashboard#analytics', icon: BarChart2, label: 'Traffic Analytics' },
   { href: '/dashboard#predictions', icon: Brain, label: 'AI Predictions' },
   { href: '/dashboard#alerts', icon: AlertTriangle, label: 'Incident Alerts' },

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Brain, CheckCircle2, X } from 'lucide-react'
 
 interface Intersection {
   id: string
@@ -63,18 +64,28 @@ export default function AIRecommendations({
   }
 
   const priorityStyle: Record<string, { badge: string; border: string }> = {
-    high: { badge: 'bg-red-100 text-red-700 border border-red-200', border: 'border-l-red-400' },
-    medium: { badge: 'bg-orange-100 text-orange-700 border border-orange-200', border: 'border-l-orange-400' },
-    low: { badge: 'bg-blue-100 text-blue-700 border border-blue-200', border: 'border-l-blue-400' },
+    high: {
+      badge: 'bg-red-500/15 text-red-400 border border-red-500/30',
+      border: 'border-l-red-400',
+    },
+    medium: {
+      badge: 'bg-orange-500/15 text-orange-400 border border-orange-500/30',
+      border: 'border-l-orange-400',
+    },
+    low: {
+      badge: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+      border: 'border-l-blue-400',
+    },
   }
 
   return (
-    <Card className="shadow-sm border border-border">
+    <Card className="bg-slate-900 border-slate-800">
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-          🤖 AI Recommendations
+        <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+          <Brain className="w-4 h-4 text-purple-400" />
+          AI Recommendations
           {aiMode && (
-            <span className="text-xs bg-cyan-100 text-cyan-700 border border-cyan-200 px-2 py-0.5 rounded-full font-medium ml-auto">
+            <span className="text-[10px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-full font-medium ml-auto">
               Auto-applying
             </span>
           )}
@@ -86,7 +97,7 @@ export default function AIRecommendations({
             <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : recommendations.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground text-sm">
+          <div className="text-center py-8 text-slate-500 text-sm">
             No recommendations at this time.
           </div>
         ) : (
@@ -96,42 +107,46 @@ export default function AIRecommendations({
               return (
                 <div
                   key={rec.id}
-                  className={`p-4 bg-muted/30 border border-border rounded-xl border-l-4 ${style.border} space-y-2`}
+                  className={`p-4 bg-slate-800/60 border border-slate-700 rounded-xl border-l-4 ${style.border} space-y-2`}
                 >
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${style.badge}`}>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${style.badge}`}>
                       {rec.priority.toUpperCase()}
                     </span>
-                    <span className="text-xs text-muted-foreground">{rec.recommendation_type}</span>
+                    <span className="text-[11px] text-slate-500">{rec.recommendation_type}</span>
                     {rec.status !== 'pending' && (
-                      <span className={`ml-auto text-xs font-medium capitalize ${
-                        rec.status === 'implemented' ? 'text-green-600' : 'text-gray-500'
+                      <span className={`ml-auto text-[11px] font-medium flex items-center gap-1 ${
+                        rec.status === 'implemented' ? 'text-green-400' : 'text-slate-500'
                       }`}>
-                        ✓ {rec.status}
+                        <CheckCircle2 className="w-3 h-3" />
+                        {rec.status}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-foreground">{rec.recommendation_text}</p>
+                  <p className="text-xs text-slate-300">{rec.recommendation_text}</p>
 
                   {rec.status === 'pending' && !aiMode && (
                     <div className="flex gap-2 pt-1">
                       <button
                         onClick={() => handleRecommendation(rec.id, 'implemented')}
-                        className="flex-1 py-1.5 px-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-100 transition"
+                        className="flex-1 py-1.5 px-3 bg-green-500/15 border border-green-500/30 text-green-400 rounded-lg text-xs font-semibold hover:bg-green-500/25 transition flex items-center justify-center gap-1.5"
                       >
-                        ✓ Implement
+                        <CheckCircle2 className="w-3 h-3" />
+                        Implement
                       </button>
                       <button
                         onClick={() => handleRecommendation(rec.id, 'dismissed')}
-                        className="flex-1 py-1.5 px-3 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-100 transition"
+                        className="flex-1 py-1.5 px-3 bg-slate-700/60 border border-slate-600 text-slate-400 rounded-lg text-xs font-semibold hover:bg-slate-700 transition flex items-center justify-center gap-1.5"
                       >
-                        ✕ Dismiss
+                        <X className="w-3 h-3" />
+                        Dismiss
                       </button>
                     </div>
                   )}
                   {rec.status === 'pending' && aiMode && (
-                    <div className="text-xs text-cyan-700 bg-cyan-50 border border-cyan-100 rounded-lg p-2">
-                      🤖 AI is auto-implementing this recommendation…
+                    <div className="text-[11px] text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2 flex items-center gap-2">
+                      <Brain className="w-3 h-3 flex-shrink-0" />
+                      AI is auto-implementing this recommendation…
                     </div>
                   )}
                 </div>

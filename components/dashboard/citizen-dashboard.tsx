@@ -234,9 +234,9 @@ export default function CitizenDashboard({
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Route Planner */}
-        <div className="lg:col-span-1 space-y-4">
+        <div className="xl:col-span-1 space-y-4">
           <Card className="bg-slate-900 border-slate-800 shadow-xl">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
@@ -451,7 +451,7 @@ export default function CitizenDashboard({
         </div>
 
         {/* Traffic Map */}
-        <div className="lg:col-span-2" id="map">
+        <div className="xl:col-span-3" id="map">
           <TrafficMap
             intersections={intersections}
             onSelectIntersection={setSelectedIntersection}
