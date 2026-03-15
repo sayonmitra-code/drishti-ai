@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,13 +31,24 @@ interface ActiveRoute {
 }
 
 // Nominatim geocoding: returns [lat, lng] or null
+// Searches across India; appends ", India" to improve geocoding accuracy.
+// Falls back to a global search if the India-scoped search returns no results.
 async function geocode(query: string): Promise<[number, number] | null> {
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Lucknow, India')}&format=json&limit=1&countrycodes=in`
+    const trimmed = query.trim()
+    const searchQuery = `${trimmed}, India`
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1&countrycodes=in`
     const res = await fetch(url, { headers: { 'User-Agent': 'DrishtiAI/1.0' } })
     const data = await res.json()
     if (data && data.length > 0) {
       return [parseFloat(data[0].lat), parseFloat(data[0].lon)]
+    }
+    // Fallback: try without country restriction for better coverage
+    const fallbackUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(trimmed)}&format=json&limit=1`
+    const fallbackRes = await fetch(fallbackUrl, { headers: { 'User-Agent': 'DrishtiAI/1.0' } })
+    const fallbackData = await fallbackRes.json()
+    if (fallbackData && fallbackData.length > 0) {
+      return [parseFloat(fallbackData[0].lat), parseFloat(fallbackData[0].lon)]
     }
     return null
   } catch {
@@ -129,6 +140,7 @@ export default function CitizenDashboard({
   const [demoMode, setDemoMode] = useState(false)
   const [demoIncident, setDemoIncident] = useState<string | null>(null)
   const [navStep, setNavStep] = useState(0)
+  const [navActive, setNavActive] = useState(false)
 
   // Demo mode: auto-rotate incidents and vehicle counts
   useEffect(() => {
@@ -165,11 +177,11 @@ export default function CitizenDashboard({
       const [fromCoords, toCoords] = await Promise.all([geocode(source), geocode(destination)])
 
       if (!fromCoords) {
-        setError(`Could not find location: "${source}". Try adding Lucknow landmarks like "Hazratganj" or "Charbagh".`)
+        setError(`Could not find location: "${source}". Try entering city names like "Lucknow", "Goa", "Kolkata", or specific areas.`)
         return
       }
       if (!toCoords) {
-        setError(`Could not find location: "${destination}". Try adding Lucknow landmarks like "Gomti Nagar" or "Alambagh".`)
+        setError(`Could not find location: "${destination}". Try entering city names like "Chandigarh University Unnao" or "Goa".`)
         return
       }
 
@@ -190,7 +202,17 @@ export default function CitizenDashboard({
   const clearRoute = () => {
     setActiveRoute(null)
     setNavStep(0)
+    setNavActive(false)
     setError(null)
+  }
+
+  const startNavigation = () => {
+    setNavActive(true)
+    setNavStep(0)
+  }
+
+  const stopNavigation = () => {
+    setNavActive(false)
   }
 
   const currentStep = activeRoute?.steps[navStep]
@@ -291,9 +313,30 @@ export default function CitizenDashboard({
                       <div className="text-muted-foreground">Est. Time</div>
                     </div>
                   </div>
-                  <div className="text-xs text-blue-700">
+                  <div className="text-xs text-blue-700 mb-2">
                     {activeRoute.fromName} → {activeRoute.toName}
                   </div>
+                  {/* Start / Stop Navigation */}
+                  {!navActive ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={startNavigation}
+                      className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-xs"
+                    >
+                      🚗 Start Navigation
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={stopNavigation}
+                      className="w-full text-xs border-red-300 text-red-600 hover:bg-red-50"
+                    >
+                      ⏹ Stop Navigation
+                    </Button>
+                  )}
                 </div>
               )}
 
@@ -379,7 +422,7 @@ export default function CitizenDashboard({
           <TrafficMap
             intersections={intersections}
             onSelectIntersection={setSelectedIntersection}
-            routeCoords={activeRoute?.routeCoords}
+            routeCoords={activeRoute ? { ...activeRoute.routeCoords, navActive } : undefined}
           />
         </div>
       </div>

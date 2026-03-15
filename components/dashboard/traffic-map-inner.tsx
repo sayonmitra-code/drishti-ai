@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, Circle, useMap } from 'react-leaflet'
+import { useEffect, useState } from 'react'
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, Circle, Marker, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import L from 'leaflet'
 
 interface Intersection {
   id: string
@@ -17,6 +18,7 @@ export interface RouteCoords {
   distance: number // meters
   duration: number // seconds
   steps: { instruction: string; distance: number }[]
+  navActive?: boolean // whether navigation mode is active (shows car marker)
 }
 
 const CONGESTION_COLORS: Record<string, string> = {
@@ -89,6 +91,69 @@ function getVehicleCount(id: string): number {
   return VEHICLE_COUNTS[id]
 }
 
+// Car marker icon for navigation mode — created once at module level (Leaflet is client-only)
+let CAR_ICON: L.DivIcon | null = null
+function getCarIcon(): L.DivIcon {
+  if (!CAR_ICON) {
+    CAR_ICON = L.divIcon({
+      html: `<div style="
+        width:32px;height:32px;
+        background:linear-gradient(135deg,#3b82f6,#1d4ed8);
+        border-radius:50% 50% 50% 0;
+        transform:rotate(-45deg);
+        border:3px solid white;
+        box-shadow:0 2px 8px rgba(59,130,246,0.6);
+        display:flex;align-items:center;justify-content:center;
+      ">
+        <svg viewBox="0 0 24 24" width="16" height="16" style="transform:rotate(45deg);fill:white;">
+          <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.08 3.11H5.77L6.85 7zM19 17H5v-5h14v5z"/>
+          <circle cx="7.5" cy="16.5" r="1.5"/>
+          <circle cx="16.5" cy="16.5" r="1.5"/>
+        </svg>
+      </div>`,
+      className: '',
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+    })
+  }
+  return CAR_ICON
+}
+
+// Animated car marker that moves along the route
+function CarNavigationMarker({ routeCoords }: { routeCoords: RouteCoords }) {
+  const [posIndex, setPosIndex] = useState(0)
+
+  useEffect(() => {
+    if (!routeCoords.navActive || routeCoords.coordinates.length === 0) return
+    setPosIndex(0)
+    const total = routeCoords.coordinates.length
+    // Advance every ~200ms to simulate movement
+    const interval = setInterval(() => {
+      setPosIndex((prev) => {
+        if (prev >= total - 1) {
+          clearInterval(interval)
+          return prev
+        }
+        return prev + 1
+      })
+    }, 200)
+    return () => clearInterval(interval)
+  }, [routeCoords])
+
+  if (!routeCoords.navActive || routeCoords.coordinates.length === 0) return null
+
+  const position = routeCoords.coordinates[Math.min(posIndex, routeCoords.coordinates.length - 1)]
+
+  return (
+    <Marker position={position} icon={getCarIcon()}>
+      <Popup>
+        <div style={{ fontSize: 12, fontWeight: 600 }}>🚗 Your vehicle</div>
+      </Popup>
+    </Marker>
+  )
+}
+
+
 export default function LeafletMapInner({
   intersections,
   onSelectIntersection,
@@ -138,7 +203,28 @@ export default function LeafletMapInner({
             weight={5}
             opacity={0.9}
           />
+          {/* Start marker */}
+          <CircleMarker
+            center={routeCoords.coordinates[0]}
+            radius={8}
+            pathOptions={{ color: '#16a34a', fillColor: '#22c55e', fillOpacity: 1, weight: 2 }}
+          >
+            <Popup><div style={{ fontSize: 12, fontWeight: 700 }}>🟢 Start</div></Popup>
+          </CircleMarker>
+          {/* Destination marker */}
+          <CircleMarker
+            center={routeCoords.coordinates[routeCoords.coordinates.length - 1]}
+            radius={8}
+            pathOptions={{ color: '#dc2626', fillColor: '#ef4444', fillOpacity: 1, weight: 2 }}
+          >
+            <Popup><div style={{ fontSize: 12, fontWeight: 700 }}>🔴 Destination</div></Popup>
+          </CircleMarker>
         </>
+      )}
+
+      {/* Animated car navigation marker */}
+      {routeCoords && routeCoords.navActive && (
+        <CarNavigationMarker routeCoords={routeCoords} />
       )}
 
       {/* Road segment polylines (only shown when no route is active) */}
