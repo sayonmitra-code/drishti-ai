@@ -75,6 +75,15 @@ export const MOCK_INTERSECTIONS: Intersection[] = [
   },
 ]
 
+/**
+ * Generates realistic hourly vehicle counts for urban Indian traffic.
+ * Pattern based on typical metro city traffic:
+ * - Night hours (0–5): minimal traffic (2–10% of peak)
+ * - Morning peak (7–9): rapid build-up to 75–95% of daily max
+ * - Midday (10–15): moderate steady flow (55–70%)
+ * - Evening peak (17–20): maximum congestion (75–100% of daily max)
+ * - Late evening (21–23): gradual decline to 15–35%
+ */
 function getHourlyPattern(hour: number, baseVehicles: number): number {
   const patterns: Record<number, number> = {
     0: 0.05, 1: 0.03, 2: 0.02, 3: 0.02, 4: 0.04, 5: 0.10,
