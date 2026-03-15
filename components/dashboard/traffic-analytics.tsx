@@ -50,95 +50,92 @@ export default function TrafficAnalytics({ intersection }: { intersection: Inter
     <div className="space-y-6">
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="backdrop-blur-md bg-white/5 border-white/10">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-400 mb-1">{avgVehicles}</div>
-              <div className="text-white/70 text-sm">Avg. Daily Vehicles</div>
-            </div>
+        <Card className="shadow-sm border border-border">
+          <CardContent className="pt-5 pb-4">
+            <div className="text-3xl font-bold text-blue-600 mb-1">{avgVehicles}</div>
+            <div className="text-sm text-muted-foreground">Avg. Daily Vehicles</div>
           </CardContent>
         </Card>
-
-        <Card className="backdrop-blur-md bg-white/5 border-white/10">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-orange-400 mb-1">{peakHours}</div>
-              <div className="text-white/70 text-sm">Peak Hours</div>
-            </div>
+        <Card className="shadow-sm border border-border">
+          <CardContent className="pt-5 pb-4">
+            <div className="text-3xl font-bold text-orange-500 mb-1">{peakHours}</div>
+            <div className="text-sm text-muted-foreground">Peak Hours/Day</div>
           </CardContent>
         </Card>
-
-        <Card className="backdrop-blur-md bg-white/5 border-white/10">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-400 mb-1">
-                {Math.round((peakHours / 24) * 100)}%
-              </div>
-              <div className="text-white/70 text-sm">Congestion Rate</div>
+        <Card className="shadow-sm border border-border">
+          <CardContent className="pt-5 pb-4">
+            <div className="text-3xl font-bold text-red-500 mb-1">
+              {Math.round((peakHours / 24) * 100)}%
             </div>
+            <div className="text-sm text-muted-foreground">Congestion Rate</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Charts */}
       {loading ? (
-        <Card className="backdrop-blur-md bg-white/5 border-white/10">
-          <CardContent className="pt-6">
-            <div className="text-white/60 text-center py-12">Loading analytics...</div>
+        <Card className="shadow-sm border border-border">
+          <CardContent className="flex items-center justify-center py-16">
+            <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
           </CardContent>
         </Card>
       ) : (
         <>
-          <Card className="backdrop-blur-md bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Hourly Traffic Volume</CardTitle>
+          <Card className="shadow-sm border border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-foreground">
+                Hourly Traffic Volume — {intersection.name}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="hour" stroke="rgba(255,255,255,0.5)" />
-                  <YAxis stroke="rgba(255,255,255,0.5)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="hour" stroke="#94a3b8" tick={{ fontSize: 10 }} interval={3} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: 'rgba(30, 41, 59, 0.8)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: '8px',
+                      backgroundColor: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      fontSize: 12,
                     }}
-                    labelStyle={{ color: 'white' }}
                   />
-                  <Legend />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Line
                     type="monotone"
                     dataKey="vehicles"
-                    stroke="#3b82f6"
+                    stroke="#0ea5e9"
                     strokeWidth={2}
                     dot={false}
+                    name="Vehicles/hr"
                   />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-md bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Peak Congestion Hours</CardTitle>
+          <Card className="shadow-sm border border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-foreground">
+                Peak Congestion Hours
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="hour" stroke="rgba(255,255,255,0.5)" />
-                  <YAxis stroke="rgba(255,255,255,0.5)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="hour" stroke="#94a3b8" tick={{ fontSize: 10 }} interval={3} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: 'rgba(30, 41, 59, 0.8)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: '8px',
+                      backgroundColor: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      fontSize: 12,
                     }}
-                    labelStyle={{ color: 'white' }}
                   />
-                  <Bar dataKey="peak" fill="#f97316" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="peak" fill="#f97316" radius={[4, 4, 0, 0]} name="Peak vehicles" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>

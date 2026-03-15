@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, Circle, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -12,31 +12,61 @@ interface Intersection {
   description: string
 }
 
+export interface RouteCoords {
+  coordinates: [number, number][] // [lat, lng] pairs
+  distance: number // meters
+  duration: number // seconds
+  steps: { instruction: string; distance: number }[]
+}
+
 const CONGESTION_COLORS: Record<string, string> = {
   low: '#22c55e',
   medium: '#f97316',
   high: '#ef4444',
 }
 
-function getCongestionLevel(index: number): 'low' | 'medium' | 'high' {
-  if (index % 3 === 0) return 'high'
-  if (index % 3 === 1) return 'medium'
+// Deterministic congestion based on intersection id
+function getCongestionLevel(id: string): 'low' | 'medium' | 'high' {
+  const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  if (hash % 3 === 0) return 'high'
+  if (hash % 3 === 1) return 'medium'
   return 'low'
 }
 
-// Road segment connections between intersections (simulate road network)
+// Lucknow road network connections
 const ROAD_CONNECTIONS: [number, number][] = [
-  [0, 4], // MG Road → Koramangala
-  [0, 5], // MG Road → Indiranagar
-  [1, 4], // Silk Board → Koramangala
-  [2, 0], // Hebbal → MG Road
-  [3, 1], // Electronic City → Silk Board
-  [4, 5], // Koramangala → Indiranagar
+  [0, 4], // Hazratganj → Aminabad
+  [0, 7], // Hazratganj → Kaiserbagh
+  [1, 4], // Charbagh → Aminabad
+  [2, 1], // Alambagh → Charbagh
+  [3, 5], // Gomti Nagar → Indira Nagar
+  [4, 7], // Aminabad → Kaiserbagh
+  [5, 6], // Indira Nagar → Aliganj
+  [6, 0], // Aliganj → Hazratganj
 ]
 
-function MapBounds({ intersections }: { intersections: Intersection[] }) {
+function MapBounds({ intersections, routeCoords }: { intersections: Intersection[]; routeCoords?: RouteCoords }) {
   const map = useMap()
+  const prevRoute = useRef<RouteCoords | undefined>(undefined)
+
   useEffect(() => {
+    if (routeCoords && routeCoords.coordinates.length > 0) {
+      if (prevRoute.current === routeCoords) return
+      prevRoute.current = routeCoords
+      const bounds: [[number, number], [number, number]] = [
+        [
+          Math.min(...routeCoords.coordinates.map((c) => c[0])) - 0.005,
+          Math.min(...routeCoords.coordinates.map((c) => c[1])) - 0.005,
+        ],
+        [
+          Math.max(...routeCoords.coordinates.map((c) => c[0])) + 0.005,
+          Math.max(...routeCoords.coordinates.map((c) => c[1])) + 0.005,
+        ],
+      ]
+      map.fitBounds(bounds, { padding: [30, 30] })
+      return
+    }
+
     if (intersections.length === 0) return
     const lats = intersections.map((i) => parseFloat(i.latitude)).filter((v) => !isNaN(v))
     const lngs = intersections.map((i) => parseFloat(i.longitude)).filter((v) => !isNaN(v))
@@ -46,18 +76,30 @@ function MapBounds({ intersections }: { intersections: Intersection[] }) {
       [Math.max(...lats) + 0.02, Math.max(...lngs) + 0.02],
     ]
     map.fitBounds(bounds)
-  }, [intersections, map])
+  }, [intersections, routeCoords, map])
   return null
+}
+
+// Simulated vehicle counts per signal (refreshed on mount)
+const VEHICLE_COUNTS: Record<string, number> = {}
+function getVehicleCount(id: string): number {
+  if (!(id in VEHICLE_COUNTS)) {
+    VEHICLE_COUNTS[id] = Math.floor(Math.random() * 120 + 20)
+  }
+  return VEHICLE_COUNTS[id]
 }
 
 export default function LeafletMapInner({
   intersections,
   onSelectIntersection,
+  routeCoords,
 }: {
   intersections: Intersection[]
   onSelectIntersection: (intersection: Intersection) => void
+  routeCoords?: RouteCoords
 }) {
-  const defaultCenter: [number, number] = [12.9716, 77.5946]
+  // Default center: Lucknow, India
+  const defaultCenter: [number, number] = [26.8467, 80.9462]
 
   const validIntersections = intersections.filter((i) => {
     const lat = parseFloat(i.latitude)
@@ -68,8 +110,8 @@ export default function LeafletMapInner({
   return (
     <MapContainer
       center={defaultCenter}
-      zoom={12}
-      style={{ height: '480px', width: '100%', borderRadius: '0 0 0.75rem 0.75rem' }}
+      zoom={13}
+      style={{ height: '500px', width: '100%', borderRadius: '0 0 0.75rem 0.75rem' }}
       scrollWheelZoom={true}
     >
       <TileLayer
@@ -77,14 +119,34 @@ export default function LeafletMapInner({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      <MapBounds intersections={validIntersections} />
+      <MapBounds intersections={validIntersections} routeCoords={routeCoords} />
 
-      {/* Road segment polylines */}
-      {ROAD_CONNECTIONS.map(([fromIdx, toIdx], idx) => {
+      {/* Route polyline */}
+      {routeCoords && routeCoords.coordinates.length > 1 && (
+        <>
+          {/* Route shadow */}
+          <Polyline
+            positions={routeCoords.coordinates}
+            color="#1e40af"
+            weight={8}
+            opacity={0.25}
+          />
+          {/* Route line */}
+          <Polyline
+            positions={routeCoords.coordinates}
+            color="#3b82f6"
+            weight={5}
+            opacity={0.9}
+          />
+        </>
+      )}
+
+      {/* Road segment polylines (only shown when no route is active) */}
+      {!routeCoords && ROAD_CONNECTIONS.map(([fromIdx, toIdx], idx) => {
         const from = validIntersections[fromIdx]
         const to = validIntersections[toIdx]
         if (!from || !to) return null
-        const congestion = getCongestionLevel(idx)
+        const congestion = getCongestionLevel(`road-${idx}`)
         return (
           <Polyline
             key={`road-${idx}`}
@@ -93,64 +155,105 @@ export default function LeafletMapInner({
               [parseFloat(to.latitude), parseFloat(to.longitude)],
             ]}
             color={CONGESTION_COLORS[congestion]}
-            weight={4}
-            opacity={0.7}
+            weight={3}
+            opacity={0.55}
             dashArray={congestion === 'high' ? '8 4' : undefined}
           />
         )
       })}
 
-      {/* Congestion zone circles */}
-      {validIntersections.map((intersection, idx) => {
-        const congestion = getCongestionLevel(idx)
+      {/* Congestion heatmap circles */}
+      {validIntersections.map((intersection) => {
+        const congestion = getCongestionLevel(intersection.id)
         if (congestion !== 'high') return null
         return (
           <Circle
             key={`zone-${intersection.id}`}
             center={[parseFloat(intersection.latitude), parseFloat(intersection.longitude)]}
-            radius={600}
+            radius={500}
             pathOptions={{
               color: CONGESTION_COLORS.high,
               fillColor: CONGESTION_COLORS.high,
-              fillOpacity: 0.08,
+              fillOpacity: 0.07,
               weight: 1,
             }}
           />
         )
       })}
 
-      {/* Intersection markers */}
-      {validIntersections.map((intersection, idx) => {
-        const congestion = getCongestionLevel(idx)
+      {/* Traffic Signal Markers */}
+      {validIntersections.map((intersection) => {
+        const congestion = getCongestionLevel(intersection.id)
         const color = CONGESTION_COLORS[congestion]
-        const signalColors: Record<string, string> = { low: 'GREEN', medium: 'YELLOW', high: 'RED' }
-        const signal = signalColors[congestion]
+        const signalLabel: Record<string, string> = { low: 'GREEN', medium: 'YELLOW', high: 'RED' }
+        const signal = signalLabel[congestion]
+        const vehicles = getVehicleCount(intersection.id)
+        const timer = congestion === 'high' ? 45 : congestion === 'medium' ? 30 : 60
+        const aiRec =
+          congestion === 'high'
+            ? `Extend green phase +15s (${vehicles} vehicles queued)`
+            : congestion === 'medium'
+            ? `Maintain current timing (${vehicles} vehicles)`
+            : `Shorten red phase -10s (${vehicles} vehicles)`
 
         return (
           <CircleMarker
             key={intersection.id}
             center={[parseFloat(intersection.latitude), parseFloat(intersection.longitude)]}
-            radius={14}
+            radius={13}
             pathOptions={{
               color: '#ffffff',
-              weight: 2,
+              weight: 2.5,
               fillColor: color,
-              fillOpacity: 0.9,
+              fillOpacity: 0.92,
             }}
             eventHandlers={{
               click: () => onSelectIntersection(intersection),
             }}
           >
             <Popup>
-              <div className="min-w-[180px] p-1">
-                <p className="font-semibold text-gray-900 text-sm mb-1">{intersection.name}</p>
-                <p className="text-gray-500 text-xs mb-2">{intersection.description}</p>
-                <span
-                  className="inline-block px-2 py-0.5 rounded text-xs font-bold text-white"
-                  style={{ backgroundColor: color }}
-                >
-                  {congestion.toUpperCase()} — Signal: {signal}
-                </span>
+              <div style={{ minWidth: 210, padding: 4 }}>
+                <p style={{ fontWeight: 700, fontSize: 13, color: '#111827', marginBottom: 4 }}>
+                  {intersection.name}
+                </p>
+                <p style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>{intersection.description}</p>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <span
+                    style={{
+                      background: color,
+                      color: '#fff',
+                      borderRadius: 4,
+                      padding: '2px 8px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {signal}
+                  </span>
+                  <span
+                    style={{
+                      background: '#f3f4f6',
+                      color: '#374151',
+                      borderRadius: 4,
+                      padding: '2px 8px',
+                      fontSize: 11,
+                    }}
+                  >
+                    ⏱ {timer}s
+                  </span>
+                  <span
+                    style={{
+                      background: '#f3f4f6',
+                      color: '#374151',
+                      borderRadius: 4,
+                      padding: '2px 8px',
+                      fontSize: 11,
+                    }}
+                  >
+                    🚗 {vehicles}
+                  </span>
+                </div>
+                <p style={{ fontSize: 11, color: '#6b7280', fontStyle: 'italic' }}>🤖 AI: {aiRec}</p>
               </div>
             </Popup>
           </CircleMarker>
