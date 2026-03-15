@@ -3,10 +3,8 @@ import { type NextRequest, NextResponse } from 'next/server'
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Redirect root to login
-  if (pathname === '/') {
-    return NextResponse.redirect(new URL('/auth/login', request.url))
-  }
+  // Protect /master-admin — let the page itself handle auth via Firebase client-side
+  // No server-side redirect needed; the page component handles the auth check
 
   return NextResponse.next()
 }
@@ -16,3 +14,4 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
+
