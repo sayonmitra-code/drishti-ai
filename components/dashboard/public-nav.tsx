@@ -29,6 +29,18 @@ export default function PublicNav() {
               </svg>
               Admin Panel
             </Link>
+            <Link
+              href="/auth/login"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/auth/sign-up"
+              className="text-sm font-semibold bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-4 py-1.5 rounded-lg hover:from-cyan-600 hover:to-blue-700 transition-all"
+            >
+              Sign up
+            </Link>
           </div>
         </div>
       </div>
