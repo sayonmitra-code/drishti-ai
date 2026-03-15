@@ -29,49 +29,63 @@ export interface Recommendation {
   intersection_id: string
 }
 
-// Sample intersections for Indian metro city (Bengaluru)
+// Sample intersections for Lucknow, Uttar Pradesh, India
 export const MOCK_INTERSECTIONS: Intersection[] = [
   {
     id: 'int-001',
-    name: 'MG Road & Brigade Rd',
-    latitude: '12.9756',
-    longitude: '77.6071',
-    description: 'High-density commercial intersection in CBD',
+    name: 'Hazratganj Chauraha',
+    latitude: '26.8503',
+    longitude: '80.9480',
+    description: 'Central hub of Lucknow — high-density commercial & cultural zone',
   },
   {
     id: 'int-002',
-    name: 'Silk Board Junction',
-    latitude: '12.9175',
-    longitude: '77.6229',
-    description: 'Critical bottleneck on Outer Ring Road',
+    name: 'Charbagh Railway Station',
+    latitude: '26.8373',
+    longitude: '80.9197',
+    description: 'Major transit node — peak congestion during train arrivals',
   },
   {
     id: 'int-003',
-    name: 'Hebbal Flyover',
-    latitude: '13.0354',
-    longitude: '77.5950',
-    description: 'Major north corridor interchange',
+    name: 'Alambagh Bus Terminal',
+    latitude: '26.8063',
+    longitude: '80.9156',
+    description: 'Southern gateway — inter-city bus terminus with high footfall',
   },
   {
     id: 'int-004',
-    name: 'Electronic City Tollgate',
-    latitude: '12.8456',
-    longitude: '77.6603',
-    description: 'Tech corridor entry point with high peak traffic',
+    name: 'Gomti Nagar Viram Khand',
+    latitude: '26.8500',
+    longitude: '81.0066',
+    description: 'Fast-growing IT & residential corridor in eastern Lucknow',
   },
   {
     id: 'int-005',
-    name: 'Koramangala 5th Block',
-    latitude: '12.9352',
-    longitude: '77.6245',
-    description: 'Startup hub residential-commercial mix',
+    name: 'Aminabad Market Crossing',
+    latitude: '26.8523',
+    longitude: '80.9231',
+    description: 'Densely packed commercial market — chronic congestion zone',
   },
   {
     id: 'int-006',
-    name: 'Indiranagar 100ft Rd',
-    latitude: '12.9784',
-    longitude: '77.6408',
-    description: 'High nightlife activity zone',
+    name: 'Indira Nagar Crossing',
+    latitude: '26.8847',
+    longitude: '81.0022',
+    description: 'Major north-east residential & commercial intersection',
+  },
+  {
+    id: 'int-007',
+    name: 'Aliganj Sector D',
+    latitude: '26.8780',
+    longitude: '80.9570',
+    description: 'Northern residential colony with school-hour traffic spikes',
+  },
+  {
+    id: 'int-008',
+    name: 'Kaiserbagh Chauraha',
+    latitude: '26.8560',
+    longitude: '80.9365',
+    description: 'Historic area crossing near government buildings',
   },
 ]
 
@@ -97,7 +111,7 @@ function getHourlyPattern(hour: number, baseVehicles: number): number {
 }
 
 export function getMockAnalytics(intersectionId: string): AnalyticsPoint[] {
-  const baseVehicles = intersectionId === 'int-002' ? 600 : 400
+  const baseVehicles = intersectionId === 'int-002' ? 600 : intersectionId === 'int-005' ? 550 : 400
   return Array.from({ length: 24 }, (_, hour) => {
     const avgVehicles = getHourlyPattern(hour, baseVehicles)
     return {
