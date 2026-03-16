@@ -113,6 +113,17 @@ const SIGNAL_CONFIGS = {
   yellow: { bg: 'bg-yellow-400', text: 'text-yellow-600', label: 'YELLOW — Slow', ring: 'ring-2 ring-yellow-400/40' },
 } as const
 
+const INCIDENT_ROTATION_MS = 12000
+const NAV_STEP_INTERVAL_MS = 5000
+const GPS_MAX_AGE_MS = 5000
+const MAX_VISIBLE_STEP_DOTS = 8
+/** Simulated ETA reduction (minutes) and distance reduction (km) per nav step cycle */
+const MINUTES_PER_NAV_STEP = 0.5
+const KM_PER_NAV_STEP = 0.2
+/** Simulated distance to next signal: starts at 300 m, increases 150 m per step */
+const BASE_SIGNAL_DISTANCE_M = 300
+const SIGNAL_DISTANCE_INCREMENT_M = 150
+
 export default function CitizenDashboard({
   intersections,
 }: {
@@ -132,16 +143,16 @@ export default function CitizenDashboard({
   const [gpsActive, setGpsActive] = useState(false)
   const gpsWatchRef = useRef<number | null>(null)
 
-  // Rotate incidents every 12 seconds automatically
+  // Rotate incidents automatically
   useEffect(() => {
-    const t = setInterval(() => setIncidentIdx((i) => (i + 1) % DEMO_INCIDENTS.length), 12000)
+    const t = setInterval(() => setIncidentIdx((i) => (i + 1) % DEMO_INCIDENTS.length), INCIDENT_ROTATION_MS)
     return () => clearInterval(t)
   }, [])
 
   // Advance nav step while route is active
   useEffect(() => {
     if (!activeRoute) return
-    const t = setInterval(() => setNavStep((s) => (s + 1) % activeRoute.steps.length), 5000)
+    const t = setInterval(() => setNavStep((s) => (s + 1) % activeRoute.steps.length), NAV_STEP_INTERVAL_MS)
     return () => clearInterval(t)
   }, [activeRoute])
 
@@ -156,7 +167,7 @@ export default function CitizenDashboard({
     gpsWatchRef.current = navigator.geolocation.watchPosition(
       (pos) => setGpsPosition([pos.coords.latitude, pos.coords.longitude]),
       () => setGpsActive(false),
-      { enableHighAccuracy: true, maximumAge: 5000 }
+      { enableHighAccuracy: true, maximumAge: GPS_MAX_AGE_MS }
     )
     setGpsActive(true)
   }, [])
@@ -189,8 +200,8 @@ export default function CitizenDashboard({
   const signalKeys = ['red', 'green', 'yellow'] as const
   const signalStyle = SIGNAL_CONFIGS[signalKeys[navStep % 3]]
   const incident = DEMO_INCIDENTS[incidentIdx]
-  const etaMin = activeRoute ? Math.max(1, activeRoute.duration - Math.floor(navStep * 0.5)) : 0
-  const distRemaining = activeRoute ? Math.max(0, activeRoute.distance - navStep * 0.2).toFixed(1) : '0'
+  const etaMin = activeRoute ? Math.max(1, activeRoute.duration - Math.floor(navStep * MINUTES_PER_NAV_STEP)) : 0
+  const distRemaining = activeRoute ? Math.max(0, activeRoute.distance - navStep * KM_PER_NAV_STEP).toFixed(1) : '0'
 
   // ── Shared floating nav panel (used both in fullscreen and sidebar) ──
   const RoutePlannerPanel = (
@@ -357,13 +368,13 @@ export default function CitizenDashboard({
                     <div className={`w-8 h-8 rounded-full flex-shrink-0 ${signalStyle.bg} ${signalStyle.ring}`} />
                     <div>
                       <div className={`text-xs font-semibold ${signalStyle.text}`}>{signalStyle.label}</div>
-                      <div className="text-[10px] text-gray-400">{300 + navStep * 150} m ahead</div>
+                      <div className="text-[10px] text-gray-400">{BASE_SIGNAL_DISTANCE_M + navStep * SIGNAL_DISTANCE_INCREMENT_M} m ahead</div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-[10px] text-gray-400">
                     <span>Step {navStep + 1} of {activeRoute.steps.length}</span>
                     <div className="flex gap-1">
-                      {activeRoute.steps.slice(0, Math.min(8, activeRoute.steps.length)).map((_, i) => (
+                      {activeRoute.steps.slice(0, Math.min(MAX_VISIBLE_STEP_DOTS, activeRoute.steps.length)).map((_, i) => (
                         <div key={i} className={`w-1.5 h-1.5 rounded-full ${i === navStep ? 'bg-purple-500' : i < navStep ? 'bg-purple-200' : 'bg-gray-200'}`} />
                       ))}
                     </div>

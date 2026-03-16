@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { RouteCoords } from './traffic-map-inner'
+import type { RouteCoords, MapAlert } from './traffic-map-inner'
 
 interface Intersection {
   id: string
@@ -29,10 +29,20 @@ export default function TrafficMap({
   intersections,
   onSelectIntersection,
   routeCoords,
+  gpsPosition,
+  centerOnGps,
+  vipRoute,
+  emergencyRoute,
+  mapAlerts,
 }: {
   intersections: Intersection[]
   onSelectIntersection: (intersection: Intersection) => void
   routeCoords?: RouteCoords
+  gpsPosition?: [number, number] | null
+  centerOnGps?: boolean
+  vipRoute?: [number, number][]
+  emergencyRoute?: [number, number][]
+  mapAlerts?: MapAlert[]
 }) {
   const [showDigitalTwin, setShowDigitalTwin] = useState(false)
   const [showHeatmap, setShowHeatmap] = useState(false)
@@ -85,8 +95,8 @@ export default function TrafficMap({
           <span className="flex items-center gap-1"><span className="w-3 h-1.5 rounded bg-orange-500 inline-block" /> Medium</span>
           <span className="flex items-center gap-1"><span className="w-3 h-1.5 rounded bg-red-500 inline-block" /> High</span>
           {routeCoords && (
-            <span className="flex items-center gap-1 text-blue-400 font-medium">
-              <span className="w-3 h-1.5 rounded bg-blue-500 inline-block" /> Active Route
+            <span className="flex items-center gap-1 text-green-400 font-medium">
+              <span className="w-3 h-1.5 rounded bg-green-500 inline-block" /> Active Route
             </span>
           )}
           {showDigitalTwin && (
@@ -108,6 +118,11 @@ export default function TrafficMap({
           routeCoords={routeCoords}
           showDigitalTwin={showDigitalTwin}
           showHeatmap={showHeatmap}
+          gpsPosition={gpsPosition}
+          centerOnGps={centerOnGps}
+          vipRoute={vipRoute}
+          emergencyRoute={emergencyRoute}
+          mapAlerts={mapAlerts}
         />
       </CardContent>
     </Card>
