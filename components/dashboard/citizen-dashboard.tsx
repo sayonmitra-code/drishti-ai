@@ -99,6 +99,8 @@ function formatDistance(meters: number): string {
   return meters < 1000 ? `${meters} m` : `${(meters / 1000).toFixed(1)} km`
 }
 
+// Demonstration alert messages — static for clarity; in production these would come from
+// live incident feeds, operator broadcasts, and AI anomaly detection.
 const DEMO_INCIDENTS = [
   { msg: '🚨 VIP movement active — NH 27 partially blocked for 30 minutes', urgent: true },
   { msg: '🚑 Emergency vehicle corridor active near Hazratganj. Please yield.', urgent: true },
@@ -126,6 +128,9 @@ const SIGNAL_DISTANCE_INCREMENT_M = 150
 
 export default function CitizenDashboard({
   intersections,
+  // userId is reserved for future personalized features (e.g. saved routes, user-specific alerts)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  userId: _userId,
 }: {
   intersections: Intersection[]
   userId: string

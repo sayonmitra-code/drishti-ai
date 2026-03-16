@@ -264,6 +264,7 @@ export default function AdminDashboard({
 
   // System Logs
   const [systemLogs, setSystemLogs] = useState<LogEntry[]>(getInitialLogs)
+  const [exportNotice, setExportNotice] = useState(false)
 
   const addLog = useCallback((type: LogEntry['type'], message: string, severity: LogEntry['severity'] = 'info') => {
     setSystemLogs(prev => [{
@@ -1336,7 +1337,11 @@ export default function AdminDashboard({
                 </span>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => alert('Export feature — download would generate a CSV/PDF report of all control actions.')}
+                    onClick={() => {
+                      // TODO: In production, generate a CSV/PDF report of control actions
+                      setExportNotice(true)
+                      setTimeout(() => setExportNotice(false), 3000)
+                    }}
                     className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
                   >
                     <FileDown className="w-3 h-3" />
@@ -1353,6 +1358,12 @@ export default function AdminDashboard({
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {exportNotice && (
+                <div className="mb-3 flex items-center gap-2 text-xs bg-green-500/10 border border-green-500/30 text-green-400 rounded-lg px-3 py-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                  Export ready — in production this would download a CSV/PDF report of all {systemLogs.length} log entries.
+                </div>
+              )}
               {systemLogs.length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-8">
                   No log entries. Actions will be recorded here.
