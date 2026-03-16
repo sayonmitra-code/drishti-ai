@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Activity,
@@ -31,6 +30,10 @@ import {
   ArrowRight,
   CheckCheck,
   Ban,
+  ScrollText,
+  Flame,
+  FileDown,
+  Trash2,
 } from 'lucide-react'
 import IntersectionMonitoring from './intersection-monitoring'
 import TrafficAnalytics from './traffic-analytics'
@@ -70,6 +73,14 @@ interface SystemAlert {
   message: string
   type: 'info' | 'warning' | 'error'
   timestamp: string
+}
+
+interface LogEntry {
+  id: string
+  timestamp: Date
+  type: 'ai' | 'manual' | 'vip' | 'emergency' | 'system'
+  message: string
+  severity: 'info' | 'warning' | 'critical'
 }
 
 type SignalMode = 'ai' | 'manual'
@@ -195,6 +206,18 @@ function timeAgo(iso: string): string {
   return `${Math.floor(diff / 3600)}h ago`
 }
 
+function fmtTime(d: Date): string {
+  return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+}
+
+function getInitialLogs(): LogEntry[] {
+  return [
+    { id: 'log-init-3', timestamp: new Date(Date.now() - 1800000), type: 'ai', message: 'AI recommendation applied — Aminabad signal timing optimized', severity: 'info' },
+    { id: 'log-init-2', timestamp: new Date(Date.now() - 2700000), type: 'ai', message: 'Traffic signal at Hazratganj updated — GREEN phase extended 15s', severity: 'info' },
+    { id: 'log-init-1', timestamp: new Date(Date.now() - 3600000), type: 'system', message: 'System initialized — AI Mode activated', severity: 'info' },
+  ]
+}
+
 const DIVERSION_ROUTES = [
   { id: 'div-001', name: 'Shaheed Path Bypass', from: 'Vibhuti Khand', to: 'Kanpur Road', status: 'available' as const },
   { id: 'div-002', name: 'Lohia Path Corridor', from: 'Hazratganj', to: 'Gomti Nagar', status: 'available' as const },
@@ -220,7 +243,7 @@ export default function AdminDashboard({
   const [incidents, setIncidents] = useState<Incident[]>(() => getInitialIncidents(intersections))
   const [schedules, setSchedules] = useState<ScheduledSignal[]>(() => getInitialSchedules(intersections))
   const [alerts, setAlerts] = useState<SystemAlert[]>(getSystemAlerts)
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('command')
 
   // VIP Corridor state
   const [vipActive, setVipActive] = useState(false)
@@ -228,12 +251,29 @@ export default function AdminDashboard({
   const [vipTo, setVipTo] = useState('')
   const [vipProgressStep, setVipProgressStep] = useState(0)
   const [vipCorridorRoute, setVipCorridorRoute] = useState<string[]>([])
+  const [vipActivatedAt, setVipActivatedAt] = useState<Date | null>(null)
 
   // Ambulance Priority state
   const [ambulanceActive, setAmbulanceActive] = useState(false)
   const [ambulanceRoute, setAmbulanceRoute] = useState('')
   const [ambulanceProgressStep, setAmbulanceProgressStep] = useState(0)
   const [ambulanceCorridorRoute, setAmbulanceCorridorRoute] = useState<string[]>([])
+
+  // Emergency type (new quick-activate buttons)
+  const [emergencyType, setEmergencyType] = useState<'ambulance' | 'fire' | 'police' | null>(null)
+
+  // System Logs
+  const [systemLogs, setSystemLogs] = useState<LogEntry[]>(getInitialLogs)
+
+  const addLog = useCallback((type: LogEntry['type'], message: string, severity: LogEntry['severity'] = 'info') => {
+    setSystemLogs(prev => [{
+      id: `log-${Date.now()}`,
+      timestamp: new Date(),
+      type,
+      message,
+      severity,
+    }, ...prev.slice(0, 99)])
+  }, [])
 
   // Predefined ambulance waypoints per route option
   const AMBULANCE_WAYPOINTS: Record<string, string[]> = {
@@ -276,15 +316,17 @@ export default function AdminDashboard({
         }),
       })
       setEmergencyMode((m) => !m)
+      const msg = emergencyMode
+        ? 'Emergency corridor deactivated — normal signal operation resumed'
+        : `Emergency Green Corridor ACTIVATED at ${selectedIntersection.name}`
       const newAlert: SystemAlert = {
         id: `alt-emergency-${Date.now()}`,
-        message: emergencyMode
-          ? 'Emergency corridor deactivated — normal signal operation resumed'
-          : `Emergency Green Corridor ACTIVATED at ${selectedIntersection.name}`,
+        message: msg,
         type: emergencyMode ? 'info' : 'warning',
         timestamp: new Date().toISOString(),
       }
       setAlerts((prev) => [newAlert, ...prev])
+      addLog('emergency', msg, emergencyMode ? 'info' : 'critical')
     } catch (error) {
       console.error('Error toggling emergency mode:', error)
     } finally {
@@ -305,29 +347,35 @@ export default function AdminDashboard({
     setVipCorridorRoute(route)
     setVipActive(true)
     setVipProgressStep(0)
+    setVipActivatedAt(new Date())
+    const msg = `VIP Green Corridor ACTIVATED: ${vipFrom} → ${vipTo}. Signals along route synchronized.`
     setAlerts((prev) => [
       {
         id: `alt-vip-${Date.now()}`,
-        message: `VIP Green Corridor ACTIVATED: ${vipFrom} → ${vipTo}. Signals along route synchronized.`,
+        message: msg,
         type: 'warning',
         timestamp: new Date().toISOString(),
       },
       ...prev,
     ])
+    addLog('vip', msg, 'warning')
   }
 
   const handleDeactivateVIP = () => {
     setVipActive(false)
     setVipProgressStep(0)
+    setVipActivatedAt(null)
+    const msg = 'VIP Corridor deactivated — normal signal operation resumed.'
     setAlerts((prev) => [
       {
         id: `alt-vip-end-${Date.now()}`,
-        message: 'VIP Corridor deactivated — normal signal operation resumed.',
+        message: msg,
         type: 'info',
         timestamp: new Date().toISOString(),
       },
       ...prev,
     ])
+    addLog('vip', msg, 'info')
   }
 
   const handleActivateAmbulance = () => {
@@ -336,29 +384,46 @@ export default function AdminDashboard({
     setAmbulanceCorridorRoute(waypoints)
     setAmbulanceActive(true)
     setAmbulanceProgressStep(0)
+    const msg = `AMBULANCE PRIORITY ACTIVE on ${ambulanceRoute}. Route cleared — signals turning green.`
     setAlerts((prev) => [
       {
         id: `alt-amb-${Date.now()}`,
-        message: `AMBULANCE PRIORITY ACTIVE on ${ambulanceRoute}. Route cleared — signals turning green.`,
+        message: msg,
         type: 'error',
         timestamp: new Date().toISOString(),
       },
       ...prev,
     ])
+    addLog('emergency', msg, 'critical')
   }
 
   const handleDeactivateAmbulance = () => {
     setAmbulanceActive(false)
     setAmbulanceProgressStep(0)
+    const msg = 'Ambulance priority corridor cleared — normal operation resumed.'
     setAlerts((prev) => [
       {
         id: `alt-amb-end-${Date.now()}`,
-        message: 'Ambulance priority corridor cleared — normal operation resumed.',
+        message: msg,
         type: 'info',
         timestamp: new Date().toISOString(),
       },
       ...prev,
     ])
+    addLog('emergency', msg, 'info')
+  }
+
+  const handleActivateEmergencyType = (type: 'ambulance' | 'fire' | 'police') => {
+    if (emergencyType === type) {
+      setEmergencyType(null)
+      const labels = { ambulance: 'Ambulance Corridor', fire: 'Fire Brigade Route', police: 'Police Emergency' }
+      addLog('emergency', `${labels[type]} deactivated — normal operation resumed.`, 'info')
+    } else {
+      setEmergencyType(type)
+      const labels = { ambulance: 'Ambulance Corridor', fire: 'Fire Brigade Route', police: 'Police Emergency' }
+      const msg = `${labels[type]} ACTIVATED — signals on route set to GREEN, cross traffic to RED.`
+      addLog('emergency', msg, 'critical')
+    }
   }
 
   // Simulate VIP corridor progress
@@ -404,29 +469,42 @@ export default function AdminDashboard({
           status: signal,
         }),
       })
+      const msg = `Manual override: ${selectedIntersection.name} set to ${signal.toUpperCase()}`
       const newAlert: SystemAlert = {
         id: `alt-manual-${Date.now()}`,
-        message: `Manual override: ${selectedIntersection.name} set to ${signal.toUpperCase()}`,
+        message: msg,
         type: 'info',
         timestamp: new Date().toISOString(),
       }
       setAlerts((prev) => [newAlert, ...prev])
+      addLog('manual', msg, 'info')
     } catch (error) {
       console.error('Error updating signal:', error)
     }
   }
 
+  const handleSignalModeChange = (mode: SignalMode) => {
+    setSignalMode(mode)
+    const msg = mode === 'ai'
+      ? 'Switched to AI Mode — Automated Signal Control activated'
+      : 'Switched to Manual Mode — Direct Control enabled'
+    addLog(mode === 'ai' ? 'ai' : 'manual', msg, 'info')
+  }
+
   const handleAllRed = () => {
-    setAllRedMode((v) => !v)
+    const next = !allRedMode
+    setAllRedMode(next)
+    const msg = next
+      ? 'ALL-RED MODE ACTIVATED — All intersections set to RED for emergency clearance'
+      : 'All-Red emergency mode deactivated — signals resuming normal operation'
     const newAlert: SystemAlert = {
       id: `alt-allred-${Date.now()}`,
-      message: allRedMode
-        ? 'All-Red emergency mode deactivated — signals resuming normal operation'
-        : 'ALL-RED MODE ACTIVATED — All intersections set to RED for emergency clearance',
-      type: allRedMode ? 'info' : 'error',
+      message: msg,
+      type: next ? 'error' : 'info',
       timestamp: new Date().toISOString(),
     }
     setAlerts((prev) => [newAlert, ...prev])
+    addLog('emergency', msg, next ? 'critical' : 'info')
   }
 
   const handleDiversion = (divId: string) => {
@@ -469,16 +547,25 @@ export default function AdminDashboard({
     'night-mode': 'bg-slate-500/20 text-slate-400 border-slate-500/30',
   }
 
-  const alertConfig: Record<SystemAlert['type'], { bar: string; icon: React.ReactNode }> = {
-    info: { bar: 'border-l-blue-400 bg-blue-500/5', icon: <Info className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" /> },
+  const alertConfig = {
+    info:    { bar: 'border-l-blue-400 bg-blue-500/5',   icon: <Info className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" /> },
     warning: { bar: 'border-l-orange-400 bg-orange-500/5', icon: <AlertTriangle className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" /> },
-    error: { bar: 'border-l-red-400 bg-red-500/5', icon: <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" /> },
+    error:   { bar: 'border-l-red-400 bg-red-500/5',     icon: <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" /> },
   }
+
+  const logTypeStyle: Record<LogEntry['type'], string> = {
+    ai:        'bg-purple-50 text-purple-700 border-purple-200',
+    manual:    'bg-blue-50 text-blue-700 border-blue-200',
+    vip:       'bg-yellow-50 text-yellow-700 border-yellow-200',
+    emergency: 'bg-red-50 text-red-700 border-red-200',
+    system:    'bg-gray-50 text-gray-700 border-gray-200',
+  }
+
 
   return (
     <div className="space-y-6">
       {/* Emergency Banner */}
-      {(emergencyMode || allRedMode) && (
+      {(emergencyMode || allRedMode || emergencyType) && (
         <div className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm border ${
           allRedMode
             ? 'bg-red-500/15 border-red-500/40 text-red-300'
@@ -487,11 +574,17 @@ export default function AdminDashboard({
           <Siren className="w-5 h-5 flex-shrink-0 animate-pulse" />
           <div>
             <span className="font-bold mr-2">
-              {allRedMode ? 'ALL-RED EMERGENCY MODE ACTIVE' : 'EMERGENCY GREEN CORRIDOR ACTIVE'}
+              {allRedMode
+                ? 'ALL-RED EMERGENCY MODE ACTIVE'
+                : emergencyType
+                ? `${emergencyType.toUpperCase()} CORRIDOR ACTIVE`
+                : 'EMERGENCY GREEN CORRIDOR ACTIVE'}
             </span>
             <span className="text-sm opacity-80">
               {allRedMode
                 ? 'All traffic signals across network set to RED. Emergency clearance in progress.'
+                : emergencyType
+                ? `${emergencyType} corridor activated. Signals on route: GREEN | Cross traffic: RED`
                 : `Emergency vehicle corridor activated at ${selectedIntersection?.name}. Signals cleared.`}
             </span>
           </div>
@@ -551,15 +644,14 @@ export default function AdminDashboard({
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-slate-900 border border-slate-800 p-1 gap-1">
+        <TabsList className="bg-slate-900 border border-slate-800 p-1 gap-1 flex-wrap h-auto">
           {[
-            { value: 'overview', label: 'Overview', icon: Activity },
-            { value: 'signals', label: 'Signal Control', icon: TrafficCone },
-            { value: 'monitoring', label: 'Monitoring', icon: BarChart2 },
-            { value: 'analytics', label: 'Analytics', icon: TrendingUp },
-            { value: 'ai', label: 'AI Insights', icon: Brain },
-            { value: 'emergency', label: 'Emergency', icon: Siren },
-          ].map(({ value, label, icon: Icon }) => (
+            { value: 'command',   label: 'Traffic Command', Icon: TrafficCone },
+            { value: 'vip',       label: 'VIP Movement',    Icon: Crown },
+            { value: 'emergency', label: 'Emergency Mgmt',  Icon: Siren },
+            { value: 'analytics', label: 'Analytics',       Icon: BarChart2 },
+            { value: 'logs',      label: 'System Logs',     Icon: ScrollText },
+          ].map(({ value, label, Icon }) => (
             <TabsTrigger
               key={value}
               value={value}
@@ -571,170 +663,52 @@ export default function AdminDashboard({
           ))}
         </TabsList>
 
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-6 mt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* City Traffic Map */}
-            <div className="lg:col-span-1">
-              <TrafficMap
-                intersections={intersections}
-                onSelectIntersection={setSelectedIntersection}
-              />
-            </div>
-
-            {/* Incidents Panel */}
-            <div className="lg:col-span-1 space-y-4">
-              <Card className="bg-slate-900 border-slate-800">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-semibold text-slate-200 flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-orange-400" />
-                      Active Incidents
-                    </span>
-                    <span className="text-xs font-medium text-orange-400 bg-orange-400/10 border border-orange-400/20 px-2 py-0.5 rounded-full">
-                      {openIncidents} open
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 max-h-80 overflow-y-auto">
-                  {incidents.map((inc) => (
-                    <div
-                      key={inc.id}
-                      className={`p-3 rounded-lg bg-slate-800/60 border-l-2 border border-slate-700/50 ${severityConfig[inc.severity].border}`}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-semibold text-slate-200">{inc.type}</span>
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${severityConfig[inc.severity].badge}`}>
-                              {inc.severity.toUpperCase()}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
-                            <MapPin className="w-2.5 h-2.5 flex-shrink-0" />
-                            {inc.location}
-                          </p>
-                        </div>
-                        <span className="text-[10px] text-slate-500 flex-shrink-0 flex items-center gap-1">
-                          <Clock className="w-2.5 h-2.5" />
-                          {timeAgo(inc.reportedAt)}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 mb-2">{inc.description}</p>
-                      {inc.status !== 'resolved' && (
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => handleIncidentStatusChange(inc.id, 'in-progress')}
-                            className={`text-[10px] px-2 py-1 rounded border transition-colors ${
-                              inc.status === 'in-progress'
-                                ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
-                                : 'text-slate-500 border-slate-700 hover:text-orange-400 hover:border-orange-500/40'
-                            }`}
-                          >
-                            In Progress
-                          </button>
-                          <button
-                            onClick={() => handleIncidentStatusChange(inc.id, 'resolved')}
-                            className="text-[10px] px-2 py-1 rounded border text-slate-500 border-slate-700 hover:text-green-400 hover:border-green-500/40 transition-colors"
-                          >
-                            Resolve
-                          </button>
-                        </div>
-                      )}
-                      {inc.status === 'resolved' && (
-                        <div className="flex items-center gap-1 text-[10px] text-green-400">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Resolved
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              {/* System Alerts */}
-              <Card className="bg-slate-900 border-slate-800">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                    <Radio className="w-4 h-4 text-cyan-400" />
-                    System Alerts
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 max-h-60 overflow-y-auto">
-                  {alerts.slice(0, 8).map((alert) => (
-                    <div
-                      key={alert.id}
-                      className={`p-2.5 rounded-lg border-l-2 border border-slate-800 ${alertConfig[alert.type].bar}`}
-                    >
-                      <div className="flex items-start gap-2">
-                        {alertConfig[alert.type].icon}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-slate-300 leading-relaxed">{alert.message}</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">{timeAgo(alert.timestamp)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Scheduled Signals */}
+        {/* ── TRAFFIC COMMAND TAB ─────────────────────────────────────────── */}
+        <TabsContent value="command" className="space-y-6 mt-4">
+          {/* Global Traffic Mode */}
           <Card className="bg-slate-900 border-slate-800">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-blue-400" />
-                Scheduled Signal Programs
+                <Zap className="w-4 h-4 text-cyan-400" />
+                Global Traffic Mode
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {schedules.map((schedule) => (
-                  <div
-                    key={schedule.id}
-                    className={`p-3 rounded-xl border transition-all ${
-                      schedule.active
-                        ? 'bg-cyan-500/10 border-cyan-500/30'
-                        : 'bg-slate-800/50 border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded border ${modeConfig[schedule.mode]}`}>
-                        {schedule.mode.replace('-', ' ').toUpperCase()}
-                      </span>
-                      <button
-                        onClick={() => handleToggleSchedule(schedule.id)}
-                        className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${
-                          schedule.active ? 'bg-cyan-600' : 'bg-slate-600'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
-                            schedule.active ? 'translate-x-4' : 'translate-x-0.5'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                    <p className="text-xs font-medium text-slate-200 mb-1 truncate">{schedule.intersectionName}</p>
-                    <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                      <span className="flex items-center gap-0.5">
-                        <Clock className="w-2.5 h-2.5" />
-                        {schedule.time}
-                      </span>
-                      <span>{schedule.duration} min</span>
-                    </div>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => handleSignalModeChange('ai')}
+                  className={`flex flex-col items-center justify-center gap-2 py-7 rounded-xl border text-sm font-bold transition-all ${
+                    signalMode === 'ai'
+                      ? 'bg-purple-600/25 border-purple-500/60 text-purple-200 shadow-lg shadow-purple-500/10'
+                      : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  <Brain className={`w-9 h-9 ${signalMode === 'ai' ? 'text-purple-400' : 'text-slate-600'}`} />
+                  {signalMode === 'ai' ? 'AI MODE ACTIVE' : 'AI MODE'}
+                  <span className={`text-xs font-normal ${signalMode === 'ai' ? 'text-purple-300/80' : 'text-slate-600'}`}>
+                    {signalMode === 'ai' ? 'Automated Signal Control' : 'Click to activate'}
+                  </span>
+                </button>
+                <button
+                  onClick={() => handleSignalModeChange('manual')}
+                  className={`flex flex-col items-center justify-center gap-2 py-7 rounded-xl border text-sm font-bold transition-all ${
+                    signalMode === 'manual'
+                      ? 'bg-orange-600/25 border-orange-500/60 text-orange-200 shadow-lg shadow-orange-500/10'
+                      : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  <Settings2 className={`w-9 h-9 ${signalMode === 'manual' ? 'text-orange-400' : 'text-slate-600'}`} />
+                  MANUAL MODE
+                  <span className={`text-xs font-normal ${signalMode === 'manual' ? 'text-orange-300/80' : 'text-slate-600'}`}>
+                    {signalMode === 'manual' ? 'Direct Control' : 'Click to activate'}
+                  </span>
+                </button>
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Signal Control Tab */}
-        <TabsContent value="signals" className="space-y-6 mt-4">
+          {/* Intersection Selector + Signal Control */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Intersection Selector */}
             <Card className="bg-slate-900 border-slate-800">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
@@ -742,7 +716,7 @@ export default function AdminDashboard({
                   Select Intersection
                 </CardTitle>
               </CardHeader>
-              <CardContent className="max-h-80 overflow-y-auto space-y-1.5">
+              <CardContent className="max-h-72 overflow-y-auto space-y-1.5">
                 {intersections.map((intersection) => {
                   const badge = getCongestionBadge(intersection.id)
                   const isSelected = selectedIntersection?.id === intersection.id
@@ -758,9 +732,7 @@ export default function AdminDashboard({
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-medium truncate pr-2">{intersection.name}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded border flex-shrink-0 ${badge.color}`}>
-                          {badge.label}
-                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded border flex-shrink-0 ${badge.color}`}>{badge.label}</span>
                       </div>
                     </button>
                   )
@@ -768,43 +740,14 @@ export default function AdminDashboard({
               </CardContent>
             </Card>
 
-            {/* Signal Control Panel */}
             <Card className="lg:col-span-2 bg-slate-900 border-slate-800">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-slate-200 flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Settings2 className="w-4 h-4 text-cyan-400" />
-                    Signal Control — {selectedIntersection?.name || 'No intersection selected'}
-                  </span>
+                <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                  <Settings2 className="w-4 h-4 text-cyan-400" />
+                  Signal Control — {selectedIntersection?.name || 'No intersection selected'}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-5">
-                {/* AI / Manual Mode Toggle */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSignalMode('ai')}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-xs font-medium transition-all ${
-                      signalMode === 'ai'
-                        ? 'bg-purple-500/15 border-purple-500/40 text-purple-300'
-                        : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    <Brain className="w-3.5 h-3.5" />
-                    AI Adaptive Mode
-                  </button>
-                  <button
-                    onClick={() => setSignalMode('manual')}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-xs font-medium transition-all ${
-                      signalMode === 'manual'
-                        ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
-                        : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    <Settings2 className="w-3.5 h-3.5" />
-                    Manual Override
-                  </button>
-                </div>
-
+              <CardContent className="space-y-4">
                 {signalMode === 'ai' && (
                   <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 space-y-2">
                     <div className="flex items-center gap-2 text-purple-300 text-xs font-medium">
@@ -837,14 +780,13 @@ export default function AdminDashboard({
                       <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
                       Manual mode active. AI control suspended. Use with caution.
                     </div>
-                    {/* Signal Color Buttons */}
                     <div>
                       <p className="text-xs text-slate-400 mb-2">Set Signal State</p>
                       <div className="grid grid-cols-3 gap-3">
                         {[
-                          { color: 'red' as ManualSignal, bg: 'bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30', active: 'bg-red-500 border-red-500 text-white', dot: 'bg-red-400', label: 'RED' },
-                          { color: 'yellow' as ManualSignal, bg: 'bg-yellow-500/20 border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/30', active: 'bg-yellow-500 border-yellow-500 text-black', dot: 'bg-yellow-400', label: 'YELLOW' },
-                          { color: 'green' as ManualSignal, bg: 'bg-green-500/20 border-green-500/50 text-green-300 hover:bg-green-500/30', active: 'bg-green-500 border-green-500 text-white', dot: 'bg-green-400', label: 'GREEN' },
+                          { color: 'red' as ManualSignal, bg: 'bg-red-500/20 border-red-500/50 text-red-300', active: 'bg-red-500 border-red-500 text-white', dot: 'bg-red-400', label: 'RED' },
+                          { color: 'yellow' as ManualSignal, bg: 'bg-yellow-500/20 border-yellow-500/50 text-yellow-300', active: 'bg-yellow-500 border-yellow-500 text-black', dot: 'bg-yellow-400', label: 'YELLOW' },
+                          { color: 'green' as ManualSignal, bg: 'bg-green-500/20 border-green-500/50 text-green-300', active: 'bg-green-500 border-green-500 text-white', dot: 'bg-green-400', label: 'GREEN' },
                         ].map(({ color, bg, active, dot, label }) => (
                           <button
                             key={color}
@@ -862,11 +804,9 @@ export default function AdminDashboard({
                   </div>
                 )}
 
-                {/* Emergency Controls */}
-                <div className="pt-3 border-t border-slate-800 space-y-3">
-                  <p className="text-xs text-slate-400 font-medium">Emergency Controls</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Emergency Green Corridor */}
+                <div className="pt-3 border-t border-slate-800">
+                  <p className="text-xs text-slate-400 font-medium mb-3">Emergency Controls</p>
+                  <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={handleEmergencyToggle}
                       disabled={emergencyLoading}
@@ -882,8 +822,6 @@ export default function AdminDashboard({
                         <div className="text-[10px] opacity-70 font-normal">Emergency vehicle passage</div>
                       </div>
                     </button>
-
-                    {/* All Red Mode */}
                     <button
                       onClick={handleAllRed}
                       className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-xs font-medium transition-all ${
@@ -904,7 +842,117 @@ export default function AdminDashboard({
             </Card>
           </div>
 
-          {/* Traffic Diversion System */}
+          {/* Incidents + Schedules */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-slate-200 flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-orange-400" />
+                    Active Incidents
+                  </span>
+                  <span className="text-xs font-medium text-orange-400 bg-orange-400/10 border border-orange-400/20 px-2 py-0.5 rounded-full">
+                    {openIncidents} open
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 max-h-80 overflow-y-auto">
+                {incidents.map((inc) => (
+                  <div
+                    key={inc.id}
+                    className={`p-3 rounded-lg bg-slate-800/60 border-l-2 border border-slate-700/50 ${severityConfig[inc.severity].border}`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-slate-200">{inc.type}</span>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${severityConfig[inc.severity].badge}`}>
+                            {inc.severity.toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
+                          <MapPin className="w-2.5 h-2.5 flex-shrink-0" />
+                          {inc.location}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-slate-500 flex-shrink-0 flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" />
+                        {timeAgo(inc.reportedAt)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mb-2">{inc.description}</p>
+                    {inc.status !== 'resolved' ? (
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => handleIncidentStatusChange(inc.id, 'in-progress')}
+                          className={`text-[10px] px-2 py-1 rounded border transition-colors ${
+                            inc.status === 'in-progress'
+                              ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
+                              : 'text-slate-500 border-slate-700 hover:text-orange-400 hover:border-orange-500/40'
+                          }`}
+                        >
+                          In Progress
+                        </button>
+                        <button
+                          onClick={() => handleIncidentStatusChange(inc.id, 'resolved')}
+                          className="text-[10px] px-2 py-1 rounded border text-slate-500 border-slate-700 hover:text-green-400 hover:border-green-500/40 transition-colors"
+                        >
+                          Resolve
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 text-[10px] text-green-400">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Resolved
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-400" />
+                  Scheduled Signal Programs
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {schedules.map((schedule) => (
+                  <div
+                    key={schedule.id}
+                    className={`p-3 rounded-xl border transition-all ${
+                      schedule.active ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-slate-800/50 border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded border ${modeConfig[schedule.mode]}`}>
+                        {schedule.mode.replace('-', ' ').toUpperCase()}
+                      </span>
+                      <button
+                        onClick={() => handleToggleSchedule(schedule.id)}
+                        className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${
+                          schedule.active ? 'bg-cyan-600' : 'bg-slate-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                          schedule.active ? 'translate-x-4' : 'translate-x-0.5'
+                        }`} />
+                      </button>
+                    </div>
+                    <p className="text-xs font-medium text-slate-200 truncate">{schedule.intersectionName}</p>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                      <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{schedule.time}</span>
+                      <span>{schedule.duration} min</span>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Traffic Diversion */}
           <Card className="bg-slate-900 border-slate-800">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
@@ -923,25 +971,18 @@ export default function AdminDashboard({
                     <div
                       key={route.id}
                       className={`p-3.5 rounded-xl border transition-all ${
-                        isActive
-                          ? 'bg-blue-500/15 border-blue-500/40'
-                          : 'bg-slate-800/50 border-slate-700'
+                        isActive ? 'bg-blue-500/15 border-blue-500/40' : 'bg-slate-800/50 border-slate-700'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <span className={`text-xs font-semibold ${isActive ? 'text-blue-300' : 'text-slate-200'}`}>
-                          {route.name}
-                        </span>
+                        <span className={`text-xs font-semibold ${isActive ? 'text-blue-300' : 'text-slate-200'}`}>{route.name}</span>
                         {isActive && (
                           <span className="text-[10px] text-blue-400 bg-blue-400/10 border border-blue-400/20 px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                            <Activity className="w-2.5 h-2.5" />
-                            Active
+                            <Activity className="w-2.5 h-2.5" />Active
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-500 mb-3">
-                        {route.from} &rarr; {route.to}
-                      </p>
+                      <p className="text-[11px] text-slate-500 mb-3">{route.from} &#8594; {route.to}</p>
                       <button
                         onClick={() => handleDiversion(route.id)}
                         className={`w-full text-xs py-1.5 rounded-lg border transition-all font-medium ${
@@ -960,125 +1001,206 @@ export default function AdminDashboard({
           </Card>
         </TabsContent>
 
-        {/* Monitoring Tab */}
-        <TabsContent value="monitoring" className="mt-4">
-          {selectedIntersection && (
-            <IntersectionMonitoring intersection={selectedIntersection} />
-          )}
+        {/* ── VIP MOVEMENT TAB ────────────────────────────────────────────── */}
+        <TabsContent value="vip" className="space-y-6 mt-4">
+          <Card className="bg-slate-900 border-slate-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-slate-200 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-yellow-400" />
+                  VIP Corridor Management
+                </span>
+                {vipActive ? (
+                  <span className="flex items-center gap-1.5 text-[11px] bg-green-500/15 border border-green-500/30 text-green-400 px-2.5 py-1 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                    CORRIDOR ACTIVE
+                  </span>
+                ) : (
+                  <span className="text-[11px] bg-slate-800 border border-slate-700 text-slate-500 px-2.5 py-1 rounded-full">
+                    INACTIVE
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-[11px] text-slate-400">
+                Create a green corridor for VIP movement. AI will synchronize signals sequentially along the route,
+                temporarily diverting cross-traffic.
+              </p>
+
+              {!vipActive ? (
+                <div className="space-y-3 max-w-md">
+                  <div>
+                    <label className="text-[11px] text-slate-400 mb-1 block">From Location</label>
+                    <input
+                      value={vipFrom}
+                      onChange={(e) => setVipFrom(e.target.value)}
+                      placeholder="Enter origin (city / intersection name)"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-yellow-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-400 mb-1 block">To Location</label>
+                    <input
+                      value={vipTo}
+                      onChange={(e) => setVipTo(e.target.value)}
+                      placeholder="Enter destination (city / intersection name)"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-yellow-500/50"
+                    />
+                  </div>
+                  <button
+                    onClick={handleActivateVIP}
+                    disabled={!vipFrom || !vipTo}
+                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-yellow-500/15 border border-yellow-500/40 text-yellow-300 text-sm font-semibold hover:bg-yellow-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Crown className="w-4 h-4" />
+                    Activate VIP Corridor
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 space-y-3">
+                    <div className="flex items-center gap-2 text-yellow-300 text-sm font-semibold">
+                      <Navigation className="w-4 h-4" />
+                      {vipFrom} <ArrowRight className="w-3.5 h-3.5" /> {vipTo}
+                    </div>
+                    <div className="space-y-1.5">
+                      {vipCorridorRoute.map((point, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-xs">
+                          {idx <= vipProgressStep ? (
+                            <CheckCheck className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                          ) : (
+                            <div className="w-3.5 h-3.5 rounded-full border border-slate-600 flex-shrink-0" />
+                          )}
+                          <span className={idx <= vipProgressStep ? 'text-green-400 font-medium' : 'text-slate-500'}>
+                            {point}
+                          </span>
+                          {idx === vipProgressStep && (
+                            <span className="text-[10px] bg-green-500/15 border border-green-500/30 text-green-400 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">
+                              GREEN
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-slate-400 pt-1 border-t border-yellow-500/20">
+                      Signals synchronized: {vipCorridorRoute.length} intersections set to GREEN
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-300">
+                    <span className="font-semibold">Citizen Alert Preview:</span>{' '}
+                    VIP movement active. Some routes may be diverted.
+                  </div>
+
+                  {vipActivatedAt && (
+                    <p className="text-[11px] text-slate-500">
+                      Activated at: {fmtTime(vipActivatedAt)}
+                    </p>
+                  )}
+
+                  <button
+                    onClick={handleDeactivateVIP}
+                    className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 text-xs font-medium hover:text-slate-200 hover:bg-slate-700 transition-all"
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    Deactivate Corridor
+                  </button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        {/* Analytics Tab */}
-        <TabsContent value="analytics" className="mt-4">
-          {selectedIntersection && (
-            <TrafficAnalytics intersection={selectedIntersection} />
-          )}
-        </TabsContent>
-
-        {/* AI Insights Tab */}
-        <TabsContent value="ai" className="space-y-6 mt-4">
-          {selectedIntersection && (
-            <>
-              <AIRecommendations intersection={selectedIntersection} />
-              <TrafficPrediction intersection={selectedIntersection} />
-            </>
-          )}
-        </TabsContent>
-
-        {/* Emergency Systems Tab */}
+        {/* ── EMERGENCY MANAGEMENT TAB ────────────────────────────────────── */}
         <TabsContent value="emergency" className="space-y-6 mt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* 3 Emergency Type Buttons */}
+          <Card className="bg-slate-900 border-slate-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <Siren className="w-4 h-4 text-red-400" />
+                Emergency Vehicle Routing
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-[11px] text-slate-400">
+                Activate a priority corridor for emergency vehicles. Signals on the route will turn GREEN;
+                cross traffic will be halted immediately.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {([
+                  { type: 'ambulance' as const, label: 'Ambulance Corridor', Icon: Ambulance, bg: 'bg-red-500/20 border-red-500/50 text-red-300',    active: 'bg-red-600/40 border-red-500 text-red-200' },
+                  { type: 'fire'      as const, label: 'Fire Brigade Route', Icon: Flame,     bg: 'bg-orange-500/20 border-orange-500/50 text-orange-300', active: 'bg-orange-600/40 border-orange-500 text-orange-200' },
+                  { type: 'police'    as const, label: 'Police Emergency',   Icon: Shield,    bg: 'bg-blue-500/20 border-blue-500/50 text-blue-300',   active: 'bg-blue-600/40 border-blue-500 text-blue-200' },
+                ]).map(({ type, label, Icon, bg, active }) => (
+                  <button
+                    key={type}
+                    onClick={() => handleActivateEmergencyType(type)}
+                    className={`flex flex-col items-center gap-3 py-7 rounded-xl border text-sm font-semibold transition-all ${emergencyType === type ? active : bg}`}
+                  >
+                    <Icon className={`w-8 h-8 ${emergencyType === type ? 'animate-pulse' : ''}`} />
+                    {label}
+                    {emergencyType === type && (
+                      <span className="text-[10px] font-normal opacity-80">Click to deactivate</span>
+                    )}
+                  </button>
+                ))}
+              </div>
 
-            {/* VIP Corridor System */}
+              {emergencyType && (
+                <div className="p-4 rounded-xl bg-red-500/15 border border-red-500/40 space-y-3">
+                  <div className="flex items-center gap-2 text-red-300 font-bold text-sm">
+                    <Siren className="w-4 h-4 animate-pulse" />
+                    EMERGENCY CORRIDOR ACTIVE &#8212; {emergencyType.toUpperCase()}
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    Simulated route: Hazratganj Chauraha &#8594; Lalbagh Junction &#8594; Kaiserbagh Intersection
+                  </p>
+                  <div className="flex flex-wrap gap-3 text-[11px]">
+                    <span className="px-2.5 py-1 rounded-full bg-green-500/20 border border-green-500/40 text-green-300 font-semibold">
+                      Signals on route: GREEN
+                    </span>
+                    <span className="px-2.5 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 font-semibold">
+                      Cross traffic: RED
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-300">
+                    <span className="font-semibold">Citizen Alert:</span>{' '}
+                    Emergency vehicle on route. Please yield and clear the way immediately.
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* All-Red Mode + Ambulance Routing */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="bg-slate-900 border-slate-800">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                  <Crown className="w-4 h-4 text-yellow-400" />
-                  VIP Corridor System
-                  {vipActive && (
-                    <span className="ml-auto flex items-center gap-1 text-[10px] bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 px-2 py-0.5 rounded-full">
-                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
-                      ACTIVE
-                    </span>
-                  )}
+                  <Shield className="w-4 h-4 text-red-400" />
+                  All-Red Emergency Mode
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-[11px] text-slate-400">
-                  Create a green corridor for VIP movement. AI will synchronize signals sequentially along the route,
-                  temporarily diverting cross-traffic.
+                  Set all intersections across the network to RED simultaneously. Use for mass emergency
+                  clearance or critical incidents requiring a full network stop.
                 </p>
-
-                {!vipActive ? (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-[11px] text-slate-400 mb-1 block">From Intersection</label>
-                      <select
-                        value={vipFrom}
-                        onChange={(e) => setVipFrom(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500/50"
-                      >
-                        <option value="">Select origin…</option>
-                        {intersections.map((i) => (
-                          <option key={i.id} value={i.name}>{i.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-slate-400 mb-1 block">To Intersection</label>
-                      <select
-                        value={vipTo}
-                        onChange={(e) => setVipTo(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500/50"
-                      >
-                        <option value="">Select destination…</option>
-                        {intersections.map((i) => (
-                          <option key={i.id} value={i.name}>{i.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <button
-                      onClick={handleActivateVIP}
-                      disabled={!vipFrom || !vipTo}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-yellow-500/15 border border-yellow-500/40 text-yellow-300 text-xs font-medium hover:bg-yellow-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <Crown className="w-3.5 h-3.5" />
-                      Activate VIP Corridor
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
-                      <div className="flex items-center gap-2 text-yellow-300 text-xs font-semibold mb-2">
-                        <Navigation className="w-3.5 h-3.5" />
-                        {vipFrom} <ArrowRight className="w-3 h-3" /> {vipTo}
-                      </div>
-                      <div className="space-y-1.5">
-                        {vipCorridorRoute.map((point, idx) => (
-                          <div key={idx} className="flex items-center gap-2 text-xs">
-                            {idx <= vipProgressStep ? (
-                              <CheckCheck className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
-                            ) : (
-                              <div className="w-3.5 h-3.5 rounded-full border border-slate-600 flex-shrink-0" />
-                            )}
-                            <span className={idx <= vipProgressStep ? 'text-green-400 font-medium' : 'text-slate-500'}>
-                              {point}
-                            </span>
-                            {idx === vipProgressStep && (
-                              <span className="text-[10px] bg-green-500/15 border border-green-500/30 text-green-400 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">
-                                GREEN
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleDeactivateVIP}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-medium hover:bg-red-500/25 transition-all"
-                    >
-                      <Ban className="w-3.5 h-3.5" />
-                      Deactivate Corridor
-                    </button>
+                <button
+                  onClick={handleAllRed}
+                  className={`w-full flex items-center justify-center gap-2 py-4 rounded-xl border text-sm font-bold transition-all ${
+                    allRedMode
+                      ? 'bg-red-600/30 border-red-500/60 text-red-200'
+                      : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-red-300 hover:border-red-500/40'
+                  }`}
+                >
+                  <Shield className={`w-5 h-5 ${allRedMode ? 'text-red-400 animate-pulse' : ''}`} />
+                  {allRedMode ? 'CANCEL ALL-RED MODE' : 'ACTIVATE ALL-RED MODE'}
+                </button>
+                {allRedMode && (
+                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-300">
+                    All {intersections.length} intersections currently set to RED. Network in emergency lockdown.
                   </div>
                 )}
               </CardContent>
@@ -1098,28 +1220,20 @@ export default function AdminDashboard({
                   )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-[11px] text-slate-400">
-                  Activate emergency vehicle priority. Signals ahead automatically turn green, cross-traffic
-                  is stopped, and nearby navigation users receive rerouting alerts.
-                </p>
-
+              <CardContent className="space-y-3">
                 {!ambulanceActive ? (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-[11px] text-slate-400 mb-1 block">Emergency Vehicle Route</label>
-                      <select
-                        value={ambulanceRoute}
-                        onChange={(e) => setAmbulanceRoute(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-red-500/50"
-                      >
-                        <option value="">Select route…</option>
-                        <option value="Gomti Nagar → King George Medical University">Gomti Nagar → KGMU</option>
-                        <option value="Charbagh → Balrampur Hospital">Charbagh → Balrampur Hospital</option>
-                        <option value="Alambagh → Ram Manohar Lohia Hospital">Alambagh → RML Hospital</option>
-                        <option value="Indira Nagar → Civil Hospital">Indira Nagar → Civil Hospital</option>
-                      </select>
-                    </div>
+                  <>
+                    <select
+                      value={ambulanceRoute}
+                      onChange={(e) => setAmbulanceRoute(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-red-500/50"
+                    >
+                      <option value="">Select route&#8230;</option>
+                      <option value="Gomti Nagar → King George Medical University">Gomti Nagar &#8594; KGMU</option>
+                      <option value="Charbagh → Balrampur Hospital">Charbagh &#8594; Balrampur Hospital</option>
+                      <option value="Alambagh → Ram Manohar Lohia Hospital">Alambagh &#8594; RML Hospital</option>
+                      <option value="Indira Nagar → Civil Hospital">Indira Nagar &#8594; Civil Hospital</option>
+                    </select>
                     <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-300 flex items-start gap-2">
                       <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                       All signals along the route will turn GREEN and cross-traffic will be halted immediately.
@@ -1132,7 +1246,7 @@ export default function AdminDashboard({
                       <Siren className="w-3.5 h-3.5" />
                       Activate Emergency Priority
                     </button>
-                  </div>
+                  </>
                 ) : (
                   <div className="space-y-3">
                     <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30">
@@ -1156,18 +1270,12 @@ export default function AdminDashboard({
                                 : idx === ambulanceProgressStep
                                 ? 'text-red-400 font-medium'
                                 : 'text-slate-400'
-                            }>
-                              {point}
-                            </span>
+                            }>{point}</span>
                             {idx === ambulanceProgressStep && (
-                              <span className="text-[10px] bg-green-500/15 border border-green-500/30 text-green-400 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">
-                                CLEAR
-                              </span>
+                              <span className="text-[10px] bg-green-500/15 border border-green-500/30 text-green-400 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">CLEAR</span>
                             )}
                             {idx > ambulanceProgressStep && (
-                              <span className="text-[10px] bg-red-500/15 border border-red-500/30 text-red-400 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">
-                                STOP
-                              </span>
+                              <span className="text-[10px] bg-red-500/15 border border-red-500/30 text-red-400 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">STOP</span>
                             )}
                           </div>
                         ))}
@@ -1184,57 +1292,122 @@ export default function AdminDashboard({
                 )}
               </CardContent>
             </Card>
+          </div>
+        </TabsContent>
 
-            {/* Smart Traffic Diversion — full width below */}
-            <Card className="lg:col-span-2 bg-slate-900 border-slate-800">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                  <Route className="w-4 h-4 text-cyan-400" />
-                  Smart Traffic Diversion
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-[11px] text-slate-400 mb-4">
-                  AI detects heavy congestion and suggests alternate routes. Activate a diversion to automatically
-                  redirect navigation users and adjust signal timings.
+        {/* ── ANALYTICS TAB ───────────────────────────────────────────────── */}
+        <TabsContent value="analytics" className="space-y-6 mt-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { Icon: Car,       iconCls: 'text-blue-400',   value: '45,230',  label: 'Total Vehicles Today',    sub: '+12% vs yesterday' },
+              { Icon: Clock,     iconCls: 'text-orange-400', value: '2.3 min', label: 'Average Wait Time',       sub: '-8% vs yesterday' },
+              { Icon: Zap,       iconCls: 'text-green-400',  value: '87%',     label: 'Signal Efficiency',       sub: '+3% this week' },
+              { Icon: Ambulance, iconCls: 'text-red-400',    value: '4.2 min', label: 'Emergency Response Time', sub: '-0.5 min avg' },
+            ].map(({ Icon, iconCls, value, label, sub }) => (
+              <Card key={label} className="bg-slate-900 border-slate-800">
+                <CardContent className="pt-4 pb-3">
+                  <Icon className={`w-5 h-5 ${iconCls} mb-2`} />
+                  <div className="text-2xl font-bold text-white">{value}</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">{label}</div>
+                  <div className="text-[10px] text-green-400 mt-1">{sub}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {selectedIntersection && (
+            <>
+              <TrafficAnalytics intersection={selectedIntersection} />
+              <AIRecommendations intersection={selectedIntersection} />
+              <TrafficPrediction intersection={selectedIntersection} />
+              <IntersectionMonitoring intersection={selectedIntersection} />
+            </>
+          )}
+        </TabsContent>
+
+        {/* ── SYSTEM LOGS TAB ─────────────────────────────────────────────── */}
+        <TabsContent value="logs" className="space-y-4 mt-4">
+          <Card className="bg-slate-900 border-slate-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-slate-200 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <ScrollText className="w-4 h-4 text-cyan-400" />
+                  Event Log &#8212; Control Actions
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => alert('Export feature &#8212; download would generate a CSV/PDF report of all control actions.')}
+                    className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    <FileDown className="w-3 h-3" />
+                    Export
+                  </button>
+                  <button
+                    onClick={() => setSystemLogs([])}
+                    className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Clear
+                  </button>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {systemLogs.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-8">
+                  No log entries. Actions will be recorded here.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {DIVERSION_ROUTES.map((route) => (
+              ) : (
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {systemLogs.map((log) => (
                     <div
-                      key={route.id}
-                      className={`p-3 rounded-xl border transition-all ${
-                        activeDiversion === route.id
-                          ? 'bg-cyan-500/15 border-cyan-500/40'
-                          : 'bg-slate-800/50 border-slate-700'
-                      }`}
+                      key={log.id}
+                      className={`flex items-start gap-3 p-3 rounded-lg border text-xs ${logTypeStyle[log.type]}`}
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="text-xs font-semibold text-slate-200">{route.name}</p>
-                        {activeDiversion === route.id && (
-                          <span className="text-[10px] bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 px-1.5 py-0.5 rounded-full flex-shrink-0 ml-1">
-                            ACTIVE
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-500 mb-3">
-                        {route.from} → {route.to}
-                      </p>
-                      <button
-                        onClick={() => handleDiversion(route.id)}
-                        className={`w-full py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
-                          activeDiversion === route.id
-                            ? 'bg-red-500/15 border-red-500/40 text-red-300 hover:bg-red-500/25'
-                            : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20'
-                        }`}
-                      >
-                        {activeDiversion === route.id ? 'Deactivate' : 'Activate Diversion'}
-                      </button>
+                      <span className="font-mono font-semibold flex-shrink-0 opacity-70">
+                        {fmtTime(log.timestamp)}
+                      </span>
+                      <span className="flex-1">{log.message}</span>
+                      <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase border ${
+                        log.severity === 'critical'
+                          ? 'bg-red-100 text-red-700 border-red-300'
+                          : log.severity === 'warning'
+                          ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
+                          : 'bg-gray-100 text-gray-600 border-gray-300'
+                      }`}>
+                        {log.severity}
+                      </span>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900 border-slate-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <Radio className="w-4 h-4 text-cyan-400" />
+                Live System Alerts
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 max-h-60 overflow-y-auto">
+              {alerts.slice(0, 10).map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`p-2.5 rounded-lg border-l-2 border border-slate-800 ${alertConfig[alert.type].bar}`}
+                >
+                  <div className="flex items-start gap-2">
+                    {alertConfig[alert.type].icon}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-slate-300 leading-relaxed">{alert.message}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{timeAgo(alert.timestamp)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
