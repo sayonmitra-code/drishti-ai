@@ -18,6 +18,10 @@ import {
   ChevronRight,
   Radio,
   Activity,
+  Crown,
+  Siren,
+  ScrollText,
+  Home,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { logOut } from '@/lib/firebase/auth'
@@ -31,16 +35,16 @@ interface SidebarItem {
 }
 
 const NAV_ITEMS: SidebarItem[] = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Citizen Dashboard', exactMatch: true },
-  { href: '/dashboard#navigation', icon: Navigation, label: 'Navigation' },
-  { href: '/dashboard#map', icon: Map, label: 'Traffic Map' },
-  { href: '/dashboard#signals', icon: TrafficCone, label: 'Traffic Signals' },
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Command Center', exactMatch: true },
+  { href: '/dashboard#command', icon: TrafficCone, label: 'Traffic Command' },
+  { href: '/dashboard#vip', icon: Crown, label: 'VIP Movement' },
+  { href: '/dashboard#emergency', icon: Siren, label: 'Emergency Mgmt' },
   { href: '/dashboard#analytics', icon: BarChart2, label: 'Traffic Analytics' },
-  { href: '/dashboard#predictions', icon: Brain, label: 'AI Insights' },
-  { href: '/dashboard#alerts', icon: AlertTriangle, label: 'Incident Alerts' },
+  { href: '/dashboard#logs', icon: ScrollText, label: 'System Logs' },
 ]
 
 const BOTTOM_ITEMS: SidebarItem[] = [
+  { href: '/', icon: Home, label: 'Citizen View' },
   { href: '/dashboard/profile', icon: User, label: 'Profile' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ]
