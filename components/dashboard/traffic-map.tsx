@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { RouteCoords } from './traffic-map-inner'
 
 interface Intersection {
   id: string
@@ -11,207 +13,102 @@ interface Intersection {
   description: string
 }
 
-const CONGESTION_COLORS: Record<string, string> = {
-  low: '#22c55e',
-  medium: '#f97316',
-  high: '#ef4444',
-}
-
-function getCongestionLevel(index: number): string {
-  if (index % 3 === 0) return 'high'
-  if (index % 3 === 1) return 'medium'
-  return 'low'
-}
-
-declare global {
-  interface Window {
-    google: typeof google
-  }
-}
+const LeafletMapInner = dynamic(() => import('./traffic-map-inner'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[580px] flex items-center justify-center bg-slate-900/50 rounded-b-xl">
+      <div className="text-center space-y-3">
+        <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-slate-500 text-sm">Loading interactive map…</p>
+      </div>
+    </div>
+  ),
+})
 
 export default function TrafficMap({
   intersections,
   onSelectIntersection,
+  routeCoords,
 }: {
   intersections: Intersection[]
   onSelectIntersection: (intersection: Intersection) => void
+  routeCoords?: RouteCoords
 }) {
-  const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<google.maps.Map | null>(null)
-  const [mapLoaded, setMapLoaded] = useState(false)
-  const [mapError, setMapError] = useState(false)
-
-  useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-
-    if (!apiKey) {
-      setMapError(true)
-      return
-    }
-
-    if (window.google?.maps) {
-      initMap()
-      return
-    }
-
-    const existingScript = document.getElementById('google-maps-script')
-    if (existingScript) {
-      existingScript.addEventListener('load', initMap)
-      return
-    }
-
-    const script = document.createElement('script')
-    script.id = 'google-maps-script'
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=visualization`
-    script.async = true
-    script.defer = true
-    script.onload = initMap
-    script.onerror = () => setMapError(true)
-    document.head.appendChild(script)
-
-    return () => {
-      script.removeEventListener('load', initMap)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  function initMap() {
-    if (!mapRef.current || mapInstanceRef.current) return
-
-    const center = intersections[0]
-      ? {
-          lat: parseFloat(intersections[0].latitude),
-          lng: parseFloat(intersections[0].longitude),
-        }
-      : { lat: 12.9716, lng: 77.5946 }
-
-    const map = new window.google.maps.Map(mapRef.current, {
-      zoom: 12,
-      center,
-      mapTypeId: 'roadmap',
-      styles: [
-        { elementType: 'geometry', stylers: [{ color: '#1a1a2e' }] },
-        { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1a2e' }] },
-        { elementType: 'labels.text.fill', stylers: [{ color: '#8a92a0' }] },
-        { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-        { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#0f172a' }] },
-        { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0c1628' }] },
-      ],
-    })
-
-    const trafficLayer = new window.google.maps.TrafficLayer()
-    trafficLayer.setMap(map)
-
-    intersections.forEach((intersection, idx) => {
-      const lat = parseFloat(intersection.latitude)
-      const lng = parseFloat(intersection.longitude)
-      if (isNaN(lat) || isNaN(lng)) return
-
-      const congestion = getCongestionLevel(idx)
-      const color = CONGESTION_COLORS[congestion]
-
-      const marker = new window.google.maps.Marker({
-        position: { lat, lng },
-        map,
-        title: intersection.name,
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 12,
-          fillColor: color,
-          fillOpacity: 0.9,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-        },
-      })
-
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: `
-          <div style="background:#1e293b;color:#f1f5f9;padding:12px;border-radius:8px;min-width:180px;">
-            <strong style="color:#06b6d4;font-size:14px;">${intersection.name}</strong>
-            <p style="margin:6px 0 4px;font-size:12px;color:#94a3b8;">${intersection.description}</p>
-            <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${color}30;color:${color};border:1px solid ${color}80;">
-              ${congestion.toUpperCase()} CONGESTION
-            </span>
-          </div>
-        `,
-      })
-
-      marker.addListener('click', () => {
-        infoWindow.open(map, marker)
-        onSelectIntersection(intersection)
-      })
-    })
-
-    mapInstanceRef.current = map
-    setMapLoaded(true)
-  }
+  const [showDigitalTwin, setShowDigitalTwin] = useState(false)
+  const [showHeatmap, setShowHeatmap] = useState(false)
 
   return (
-    <Card className="glass h-full">
-      <CardHeader>
-        <CardTitle className="gradient-text flex items-center gap-2">
-          <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.553-.894L9 7m0 13l6-3m-6 3V7m6 10l4.894 2.447A1 1 0 0021 18.618V7.382a1 1 0 00-1.447-.894L15 8m0 13V8" />
-          </svg>
-          Live Traffic Map
-        </CardTitle>
+    <Card className="h-full bg-slate-900 border-slate-800 shadow-xl">
+      <CardHeader className="pb-2 pt-3 px-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <CardTitle className="flex items-center gap-2 text-slate-200 text-sm font-semibold">
+            <svg className="w-4 h-4 text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.553-.894L9 7m0 13l6-3m-6 3V7m6 10l4.894 2.447A1 1 0 0021 18.618V7.382a1 1 0 00-1.447-.894L15 8m0 13V8" />
+            </svg>
+            Live Traffic Map — Lucknow
+            <span className="flex items-center gap-1 text-[10px] font-normal text-green-400 ml-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
+              Live
+            </span>
+          </CardTitle>
+
+          {/* Feature Toggles */}
+          <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setShowDigitalTwin((v) => !v)}
+              className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
+                showDigitalTwin
+                  ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+              Digital Twin
+            </button>
+            <button
+              onClick={() => setShowHeatmap((v) => !v)}
+              className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
+                showHeatmap
+                  ? 'bg-orange-500/20 border-orange-500/50 text-orange-300'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block" />
+              AI Heatmap
+            </button>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center gap-4 text-[10px] text-slate-500 mt-1.5 flex-wrap">
+          <span className="flex items-center gap-1"><span className="w-3 h-1.5 rounded bg-green-500 inline-block" /> Low</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-1.5 rounded bg-orange-500 inline-block" /> Medium</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-1.5 rounded bg-red-500 inline-block" /> High</span>
+          {routeCoords && (
+            <span className="flex items-center gap-1 text-blue-400 font-medium">
+              <span className="w-3 h-1.5 rounded bg-blue-500 inline-block" /> Active Route
+            </span>
+          )}
+          {showDigitalTwin && (
+            <span className="flex items-center gap-1 text-cyan-400">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" /> Digital Twin: {48} vehicles
+            </span>
+          )}
+          {showHeatmap && (
+            <span className="flex items-center gap-1 text-orange-400">
+              <span className="w-2 h-2 rounded-full bg-orange-400 inline-block opacity-60" /> AI Predicted Zones
+            </span>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="p-0">
-        {mapError ? (
-          <div className="w-full h-96 bg-gradient-to-br from-slate-800 to-slate-900 rounded-b-lg flex flex-col items-center justify-center p-6">
-            <div className="text-center space-y-4">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-cyan-500/20 border border-cyan-500/50 rounded-full animate-pulse-glow">
-                <svg className="w-8 h-8 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.553-.894L9 7m0 13l6-3m-6 3V7m6 10l4.894 2.447A1 1 0 0021 18.618V7.382a1 1 0 00-1.447-.894L15 8m0 13V8" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-foreground font-semibold mb-1">Traffic Intersections</h3>
-                <p className="text-foreground/60 text-sm mb-2">
-                  Configure NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for live map
-                </p>
-                <p className="text-foreground/40 text-xs mb-4">
-                  {intersections.length} intersections monitored
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
-                {intersections.slice(0, 4).map((intersection, idx) => {
-                  const congestion = getCongestionLevel(idx)
-                  return (
-                    <button
-                      key={intersection.id}
-                      onClick={() => onSelectIntersection(intersection)}
-                      className="px-3 py-2 glass-sm bg-cyan-600/20 border-cyan-500/50 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-600/40 transition text-xs font-medium rounded-lg"
-                    >
-                      <span
-                        className="inline-block w-2 h-2 rounded-full mr-1"
-                        style={{ backgroundColor: CONGESTION_COLORS[congestion] }}
-                      />
-                      {intersection.name.split(' & ')[0]}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="relative">
-            <div
-              ref={mapRef}
-              className="w-full h-96 rounded-b-lg"
-              style={{ minHeight: '384px' }}
-            />
-            {!mapLoaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-b-lg">
-                <div className="text-center">
-                  <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                  <p className="text-white/60 text-sm">Loading map...</p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        <LeafletMapInner
+          intersections={intersections}
+          onSelectIntersection={onSelectIntersection}
+          routeCoords={routeCoords}
+          showDigitalTwin={showDigitalTwin}
+          showHeatmap={showHeatmap}
+        />
       </CardContent>
     </Card>
   )

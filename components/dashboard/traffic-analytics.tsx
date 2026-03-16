@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { BarChart2, Car, TrendingUp } from 'lucide-react'
 
 interface Intersection {
   id: string
@@ -46,99 +47,93 @@ export default function TrafficAnalytics({ intersection }: { intersection: Inter
     analyticsData.reduce((sum, d) => sum + d.average_vehicles, 0) / (analyticsData.length || 1)
   )
 
+  const tooltipStyle = {
+    backgroundColor: '#0f172a',
+    border: '1px solid #1e293b',
+    borderRadius: 8,
+    fontSize: 11,
+    color: '#e2e8f0',
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5" id="analytics">
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="backdrop-blur-md bg-white/5 border-white/10">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-400 mb-1">{avgVehicles}</div>
-              <div className="text-white/70 text-sm">Avg. Daily Vehicles</div>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="pt-4 pb-3">
+            <Car className="w-4 h-4 text-cyan-400 mb-1" />
+            <div className="text-2xl font-bold text-cyan-300">{avgVehicles}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">Avg. Daily Vehicles</div>
           </CardContent>
         </Card>
-
-        <Card className="backdrop-blur-md bg-white/5 border-white/10">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-orange-400 mb-1">{peakHours}</div>
-              <div className="text-white/70 text-sm">Peak Hours</div>
-            </div>
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="pt-4 pb-3">
+            <TrendingUp className="w-4 h-4 text-orange-400 mb-1" />
+            <div className="text-2xl font-bold text-orange-300">{peakHours}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">Peak Hours / Day</div>
           </CardContent>
         </Card>
-
-        <Card className="backdrop-blur-md bg-white/5 border-white/10">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-400 mb-1">
-                {Math.round((peakHours / 24) * 100)}%
-              </div>
-              <div className="text-white/70 text-sm">Congestion Rate</div>
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="pt-4 pb-3">
+            <BarChart2 className="w-4 h-4 text-red-400 mb-1" />
+            <div className="text-2xl font-bold text-red-300">
+              {Math.round((peakHours / 24) * 100)}%
             </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">Congestion Rate</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Charts */}
       {loading ? (
-        <Card className="backdrop-blur-md bg-white/5 border-white/10">
-          <CardContent className="pt-6">
-            <div className="text-white/60 text-center py-12">Loading analytics...</div>
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="flex items-center justify-center py-16">
+            <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
           </CardContent>
         </Card>
       ) : (
         <>
-          <Card className="backdrop-blur-md bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Hourly Traffic Volume</CardTitle>
+          <Card className="bg-slate-900 border-slate-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-slate-200">
+                Hourly Traffic Volume — {intersection.name}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="hour" stroke="rgba(255,255,255,0.5)" />
-                  <YAxis stroke="rgba(255,255,255,0.5)" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(30, 41, 59, 0.8)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: '8px',
-                    }}
-                    labelStyle={{ color: 'white' }}
-                  />
-                  <Legend />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="hour" stroke="#475569" tick={{ fontSize: 10, fill: '#64748b' }} interval={3} />
+                  <YAxis stroke="#475569" tick={{ fontSize: 10, fill: '#64748b' }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
                   <Line
                     type="monotone"
                     dataKey="vehicles"
-                    stroke="#3b82f6"
+                    stroke="#06b6d4"
                     strokeWidth={2}
                     dot={false}
+                    name="Vehicles/hr"
                   />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-md bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Peak Congestion Hours</CardTitle>
+          <Card className="bg-slate-900 border-slate-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-slate-200">
+                Peak Congestion Hours
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="hour" stroke="rgba(255,255,255,0.5)" />
-                  <YAxis stroke="rgba(255,255,255,0.5)" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(30, 41, 59, 0.8)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: '8px',
-                    }}
-                    labelStyle={{ color: 'white' }}
-                  />
-                  <Bar dataKey="peak" fill="#f97316" radius={[8, 8, 0, 0]} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="hour" stroke="#475569" tick={{ fontSize: 10, fill: '#64748b' }} interval={3} />
+                  <YAxis stroke="#475569" tick={{ fontSize: 10, fill: '#64748b' }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Bar dataKey="peak" fill="#f97316" radius={[4, 4, 0, 0]} name="Peak vehicles" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
