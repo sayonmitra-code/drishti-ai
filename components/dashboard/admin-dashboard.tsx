@@ -982,7 +982,7 @@ export default function AdminDashboard({
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-500 mb-3">{route.from} &#8594; {route.to}</p>
+                      <p className="text-[11px] text-slate-500 mb-3">{route.from} → {route.to}</p>
                       <button
                         onClick={() => handleDiversion(route.id)}
                         className={`w-full text-xs py-1.5 rounded-lg border transition-all font-medium ${
@@ -1151,10 +1151,10 @@ export default function AdminDashboard({
                 <div className="p-4 rounded-xl bg-red-500/15 border border-red-500/40 space-y-3">
                   <div className="flex items-center gap-2 text-red-300 font-bold text-sm">
                     <Siren className="w-4 h-4 animate-pulse" />
-                    EMERGENCY CORRIDOR ACTIVE &#8212; {emergencyType.toUpperCase()}
+                    EMERGENCY CORRIDOR ACTIVE — {emergencyType.toUpperCase()}
                   </div>
                   <p className="text-[11px] text-slate-300">
-                    Simulated route: Hazratganj Chauraha &#8594; Lalbagh Junction &#8594; Kaiserbagh Intersection
+                    Simulated route: Hazratganj Chauraha → Lalbagh Junction → Kaiserbagh Intersection
                   </p>
                   <div className="flex flex-wrap gap-3 text-[11px]">
                     <span className="px-2.5 py-1 rounded-full bg-green-500/20 border border-green-500/40 text-green-300 font-semibold">
@@ -1228,11 +1228,11 @@ export default function AdminDashboard({
                       onChange={(e) => setAmbulanceRoute(e.target.value)}
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-red-500/50"
                     >
-                      <option value="">Select route&#8230;</option>
-                      <option value="Gomti Nagar → King George Medical University">Gomti Nagar &#8594; KGMU</option>
-                      <option value="Charbagh → Balrampur Hospital">Charbagh &#8594; Balrampur Hospital</option>
-                      <option value="Alambagh → Ram Manohar Lohia Hospital">Alambagh &#8594; RML Hospital</option>
-                      <option value="Indira Nagar → Civil Hospital">Indira Nagar &#8594; Civil Hospital</option>
+                      <option value="">Select route…</option>
+                      <option value="Gomti Nagar → King George Medical University">Gomti Nagar → KGMU</option>
+                      <option value="Charbagh → Balrampur Hospital">Charbagh → Balrampur Hospital</option>
+                      <option value="Alambagh → Ram Manohar Lohia Hospital">Alambagh → RML Hospital</option>
+                      <option value="Indira Nagar → Civil Hospital">Indira Nagar → Civil Hospital</option>
                     </select>
                     <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-300 flex items-start gap-2">
                       <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
@@ -1332,11 +1332,11 @@ export default function AdminDashboard({
               <CardTitle className="text-sm font-semibold text-slate-200 flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <ScrollText className="w-4 h-4 text-cyan-400" />
-                  Event Log &#8212; Control Actions
+                  Event Log — Control Actions
                 </span>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => alert('Export feature &#8212; download would generate a CSV/PDF report of all control actions.')}
+                    onClick={() => alert('Export feature — download would generate a CSV/PDF report of all control actions.')}
                     className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
                   >
                     <FileDown className="w-3 h-3" />
