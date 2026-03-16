@@ -8,28 +8,33 @@
 
 DRISHTI is a full-stack Next.js application deployed on Vercel's edge network. It follows a modern **client-server hybrid architecture** using Next.js 16's App Router with both Server Components (for initial data fetching) and Client Components (for real-time interactivity).
 
+The platform is split into two distinct operational phases:
+
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                    DRISHTI PLATFORM                            │
-│                                                                │
-│  ┌─────────────────────┐    ┌──────────────────────────────┐  │
-│  │  CITIZEN DASHBOARD  │    │  TRAFFIC CONTROL CENTER      │  │
-│  │  (Public Facing)    │    │  (Admin Panel)               │  │
-│  │                     │    │                              │  │
-│  │ • Route Planning    │    │ • Intersection Monitoring    │  │
-│  │ • Traffic Map       │    │ • Signal Management          │  │
-│  │ • AI Alerts         │    │ • Analytics Dashboard        │  │
-│  │ • Signal Status     │    │ • AI Recommendations         │  │
-│  └─────────────────────┘    └──────────────────────────────┘  │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                      DRISHTI PLATFORM                             │
+│                                                                   │
+│  ┌────────────────────────┐    ┌─────────────────────────────┐   │
+│  │  PHASE 1 — CITIZEN     │    │  PHASE 2 — OFFICIAL CONTROL │   │
+│  │  Route: /              │    │  Route: /dashboard          │   │
+│  │  Auth: NOT required    │    │  Auth: Firebase required    │   │
+│  │  Theme: Light          │    │  Theme: Dark                │   │
+│  │                        │    │                             │   │
+│  │ • Full-screen map      │    │ • Traffic Command           │   │
+│  │ • GPS live location    │    │ • VIP Movement              │   │
+│  │ • India-wide routing   │    │ • Emergency Mgmt            │   │
+│  │ • Auto alert banners   │    │ • Analytics                 │   │
+│  │ • Congestion markers   │    │ • System Logs               │   │
+│  └────────────────────────┘    └─────────────────────────────┘   │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
                           │
-            ┌─────────────┼─────────────┐
-            ▼             ▼             ▼
-     ┌──────────┐  ┌────────────┐  ┌──────────────┐
-     │ Firebase │  │ Leaflet.js+OpenStreetMap│  │  Supabase    │
-     │   Auth   │  │  Platform  │  │  (Optional)  │
-     └──────────┘  └────────────┘  └──────────────┘
+            ┌─────────────┼──────────────┐
+            ▼             ▼              ▼
+     ┌──────────┐  ┌────────────────┐  ┌──────────────┐
+     │ Firebase │  │ Leaflet.js +   │  │  Supabase    │
+     │   Auth   │  │ OpenStreetMap  │  │  (Optional)  │
+     └──────────┘  └────────────────┘  └──────────────┘
 ```
 
 ---
@@ -41,7 +46,7 @@ DRISHTI is a full-stack Next.js application deployed on Vercel's edge network. I
 ```
 Next.js 16 App Router (Turbopack)
 ├── Server Components (RSC)     → Initial data fetch, SEO, layout
-├── Client Components           → Interactivity, Firebase auth, maps
+├── Client Components           → Interactivity, Firebase auth, maps, GPS
 ├── API Routes (Route Handlers) → Backend API endpoints
 └── Proxy Middleware            → Route protection, redirects
 ```
@@ -56,8 +61,8 @@ Firebase Authentication
 └── Client-side Session Persistence
 
 Flow:
-User → Login Page → Firebase Auth → JWT Token
-→ AuthContext updates → Dashboard unlocked
+User → /auth/login → Firebase Auth → JWT Token
+→ AuthContext updates → Redirect to /dashboard
 ```
 
 ### 2.3 Data Layer
@@ -79,26 +84,223 @@ Leaflet.js + OpenStreetMap (free, no API key required)
 ├── Default center: Lucknow, India (26.8467°N, 80.9462°E)
 ├── OpenStreetMap tile layer
 ├── Intersection markers (colored by congestion level)
-├── Route polyline with start/destination markers
+├── Route polyline — green (#16A34A) for citizen navigation
+├── VIP route polyline — purple (#7C3AED) pulsing
+├── Emergency route polyline — red flashing
+├── GPS marker — blue pulsing circle at user's live location
 ├── Animated car marker for navigation mode
-├── Congestion heatmap circles (high-congestion zones)
-└── Road segment polylines (when no route active)
+├── Alert markers — accidents, congestion, VIP, emergency
+└── Congestion heatmap circles (high-congestion zones)
 
 Geocoding: Nominatim (OpenStreetMap)
 ├── India-wide place name resolution
 ├── Fallback search (global) for unresolved places
-└── Supports any city/area in India
+└── Used for citizen routing AND VIP/emergency corridors
 
 Routing: OSRM (Open Source Routing Machine)
-├── Driving route calculation
+├── Citizen navigation route calculation
+├── VIP corridor route calculation
+├── Emergency vehicle corridor route calculation
 ├── Full route geometry (polyline coordinates)
-├── Turn-by-turn step instructions
 └── Distance and duration estimates
 ```
 
 ---
 
-## 3. Folder Structure Explained
+## 3. Phase Architecture
+
+### 3.1 Phase 1 — Citizen Mode
+
+```
+User visits /
+       │
+       ▼
+CitizenDashboard (Client Component — no auth check)
+       │
+       ├── Full-screen Leaflet Map
+       │     ├── Congestion markers (green/yellow/red circles)
+       │     ├── Alert markers (accidents, road closures)
+       │     ├── Navigation route polyline (green) + car marker
+       │     └── GPS blue pulsing marker
+       │
+       ├── Floating Navigation Panel (overlaid on map after route found)
+       │     ├── Source / Destination inputs → Nominatim geocoding
+       │     ├── Get Route → OSRM routing → green polyline
+       │     └── GPS button → watchPosition() → car marker follows user
+       │
+       └── Auto Alert Banner (cycles automatically)
+             ├── VIP movement active
+             ├── Emergency vehicle corridor
+             ├── Heavy congestion
+             ├── Accident report
+             └── Road closure
+```
+
+### 3.2 Phase 2 — Official Control Mode
+
+```
+User visits /auth/login → Firebase Auth → /dashboard
+       │
+       ▼
+AdminDashboard (Client Component — auth required)
+       │
+       ├── Tab: Traffic Command
+       │     ├── Global Mode Toggle (AI MODE / MANUAL MODE)
+       │     └── Per-intersection signal override controls
+       │
+       ├── Tab: VIP Movement
+       │     ├── From / To inputs → OSRM route
+       │     ├── Map shows purple pulsing polyline + crown markers
+       │     ├── Citizen alert preview
+       │     └── Event logged to System Logs
+       │
+       ├── Tab: Emergency Mgmt
+       │     ├── Emergency type selector (Ambulance / Fire / Police)
+       │     ├── From / To inputs → OSRM route
+       │     ├── Map shows red flashing polyline
+       │     ├── Cross-traffic signals → RED
+       │     └── Event logged to System Logs
+       │
+       ├── Tab: Analytics
+       │     ├── Metric cards (vehicles, wait time, incidents, AI efficiency)
+       │     └── Hourly traffic Recharts charts
+       │
+       └── Tab: System Logs
+             └── Color-coded timestamped log of all control actions
+```
+
+---
+
+## 4. GPS Integration Architecture
+
+```
+Browser navigator.geolocation.watchPosition()
+       │
+       ▼ coords (latitude, longitude)
+TrafficMapInner (Client Component)
+       │
+       ├── Blue pulsing circle marker placed at GPS coords
+       ├── Map auto-pans to follow user (setView)
+       └── Car marker (navigation mode) updates to GPS position
+
+Permissions model:
+  User clicks "GPS" button → browser prompts for location permission
+  On grant → watchPosition starts → continuous updates
+  On deny → graceful no-op (button ignored)
+
+Cost: Free — uses browser Geolocation API, no third-party service
+```
+
+---
+
+## 5. VIP Corridor System Architecture
+
+```
+Official enters From / To locations
+       │
+       ▼
+Nominatim geocoding → coordinates
+       │
+       ▼
+OSRM /route/v1/driving/{lng1},{lat1};{lng2},{lat2}
+       │
+       ▼
+Route geometry (polyline coordinates)
+       │
+       ├── Map layer: purple (#7C3AED) pulsing polyline
+       ├── Crown icon markers at waypoints
+       ├── Citizen alert banner: "VIP Movement Active — [route]"
+       └── System Log entry: "VIP corridor activated: [from] → [to]"
+```
+
+---
+
+## 6. Emergency Vehicle Routing Architecture
+
+```
+Official selects emergency type + From / To
+       │
+       ▼
+Nominatim geocoding → coordinates
+       │
+       ▼
+OSRM route → emergency corridor geometry
+       │
+       ├── Map layer: red flashing polyline
+       ├── Intersections on corridor: signals → GREEN for emergency vehicle
+       ├── Cross-traffic signals on corridor: signals → RED
+       ├── Citizen alert banner: "[Type] Emergency Corridor Active"
+       └── System Log entry: "[Ambulance/Fire/Police] emergency: [from] → [to]"
+
+Emergency types:
+  🚑 Ambulance  — medical emergency
+  🚒 Fire Brigade — fire/hazard
+  🚓 Police     — law enforcement
+```
+
+---
+
+## 7. System Logs Architecture
+
+```
+Any control action in Phase 2
+       │
+       ▼
+addLogEntry(type, message)
+       │
+       ▼
+logs[] state array (React useState)
+       │
+       ├── Stored in component state (session-scoped)
+       ├── Displayed in System Logs tab with timestamp
+       └── Color-coded by type:
+             🔵 ai       — AI mode decisions
+             🟡 override — manual signal overrides
+             🟣 vip      — VIP corridor events
+             🔴 emergency — emergency activations
+             ⚪ system   — mode switches, general events
+
+Logged events:
+  • Global mode switched (AI ↔ Manual)
+  • Signal manually overridden at intersection [X]
+  • VIP corridor activated: [from] → [to]
+  • Emergency ([type]) corridor activated: [from] → [to]
+  • AI recommendation applied at intersection [X]
+```
+
+---
+
+## 8. Full-screen Map Architecture
+
+```
+Phase 1 — Two states:
+
+State A (default — no active route):
+  ┌─────────────────────────────────────┐
+  │  Header + Search Panel              │
+  │  Alert Banner (cycling)             │
+  │  Map (fixed height, e.g. 400px)     │
+  └─────────────────────────────────────┘
+
+State B (route active):
+  ┌─────────────────────────────────────┐
+  │  Map (100vh, full viewport)         │
+  │  ┌─────────────────────────────┐    │
+  │  │  Floating Nav Panel         │    │
+  │  │  (position: absolute)       │    │
+  │  │  Source / Destination       │    │
+  │  │  GPS button                 │    │
+  │  │  Route info (dist, time)    │    │
+  │  └─────────────────────────────┘    │
+  │  Alert Banner (floating)            │
+  └─────────────────────────────────────┘
+
+Trigger: routeCoords.length > 0 → expand map to full viewport
+```
+
+---
+
+## 9. Folder Structure Explained
 
 ```
 drishti-ai/
@@ -124,23 +326,25 @@ drishti-ai/
 │   │   ├── sign-up/page.tsx        # Firebase registration
 │   │   └── sign-up-success/page.tsx
 │   │
-│   ├── dashboard/                  # Protected Dashboard Area
+│   ├── dashboard/                  # Protected Dashboard Area (Phase 2)
 │   │   ├── layout.tsx              # Firebase auth check (client)
-│   │   ├── page.tsx                # Citizen Dashboard
-│   │   └── admin/page.tsx          # Traffic Control Center
+│   │   └── page.tsx                # Official Control Center (5 modules)
 │   │
+│   ├── page.tsx                    # Citizen Interface (Phase 1, public)
 │   ├── layout.tsx                  # Root layout + AuthProvider
 │   └── globals.css                 # Global styles + Tailwind
 │
 ├── components/
 │   ├── dashboard/
-│   │   ├── citizen-dashboard.tsx   # Main citizen interface
-│   │   ├── admin-dashboard.tsx     # Admin control panel
-│   │   ├── traffic-map.tsx         # Leaflet.js + OpenStreetMap integration
+│   │   ├── citizen-dashboard.tsx   # Phase 1: full-screen map, GPS, alerts
+│   │   ├── admin-dashboard.tsx     # Phase 2: tabbed command center
+│   │   ├── traffic-map.tsx         # Leaflet.js + OpenStreetMap wrapper
+│   │   ├── traffic-map-inner.tsx   # Map internals: GPS, VIP, emergency layers
 │   │   ├── traffic-signals.tsx     # Signal cards with countdown
 │   │   ├── traffic-analytics.tsx   # Recharts line + bar charts
 │   │   ├── ai-recommendations.tsx  # AI suggestion panel
-│   │   └── nav.tsx                 # Navigation (Firebase logout)
+│   │   └── nav.tsx                 # Sidebar (Traffic Command, VIP, Emergency,
+│   │                               #          Analytics, System Logs, Citizen View)
 │   └── ui/                         # shadcn/ui component library
 │
 ├── lib/
@@ -162,16 +366,16 @@ drishti-ai/
 
 ---
 
-## 4. Data Flow Diagrams
+## 10. Data Flow Diagrams
 
-### 4.1 Authentication Flow
+### 10.1 Authentication Flow
 
 ```
-┌─────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────┐
-│  User   │────▶│  Login Page  │────▶│  Firebase    │────▶│Dashboard │
-│         │     │              │     │  Auth API    │     │          │
-│         │     │ Email/Google │     │              │     │          │
-└─────────┘     └──────────────┘     └──────────────┘     └──────────┘
+┌─────────┐     ┌──────────────┐     ┌──────────────┐     ┌────────────┐
+│  User   │────▶│ /auth/login  │────▶│  Firebase    │────▶│/dashboard  │
+│         │     │              │     │  Auth API    │     │(Phase 2)   │
+│         │     │ Email/Google │     │              │     │            │
+└─────────┘     └──────────────┘     └──────────────┘     └────────────┘
                                             │
                                             ▼
                                      ┌──────────────┐
@@ -181,7 +385,7 @@ drishti-ai/
                                      └──────────────┘
 ```
 
-### 4.2 Traffic Data Flow
+### 10.2 Traffic Data Flow
 
 ```
 ┌──────────────────┐          ┌─────────────────┐
@@ -203,54 +407,60 @@ drishti-ai/
                               └────────────────┘
 ```
 
-### 4.3 Leaflet.js+OpenStreetMap Integration
+### 10.3 Leaflet.js + OpenStreetMap Integration
 
 ```
-┌──────────────────────────────────────────────────────┐
-│  TrafficMap Component (Client)                       │
-│                                                      │
-│  1. Check NEXT_PUBLIC_GOOGLE_MAPS_API_KEY            │
-│     ├── Missing → Show Fallback UI with intersection │
-│     │            buttons (functional for demo)       │
-│     └── Present → Load Maps JS API dynamically      │
-│                                                      │
-│  2. Initialize Google Map (dark theme)               │
-│  3. Attach TrafficLayer                              │
-│  4. Place intersection markers (colored by           │
-│     congestion: 🟢 low / 🟡 medium / 🔴 high)       │
-│  5. Add click handlers → info windows + selection    │
-└──────────────────────────────────────────────────────┘
+TrafficMapInner Component (Client)
+       │
+       ├── Initialize Leaflet map (OpenStreetMap tiles)
+       ├── Place congestion markers (green/yellow/red by level)
+       ├── Render citizen route polyline (green #16A34A)
+       ├── Render VIP route polyline (purple #7C3AED, pulsing)
+       ├── Render emergency route polyline (red, flashing)
+       ├── Place GPS marker (blue pulsing circle) at watchPosition coords
+       └── Auto-pan map when GPS coords update
 ```
 
 ---
 
-## 5. Component Hierarchy
+## 11. Component Hierarchy
 
 ```
 app/layout.tsx (Server)
 └── AuthProvider (Client — Firebase context)
+    ├── app/page.tsx → CitizenDashboard (Phase 1 — no auth)
+    │   ├── TrafficMap (Client — Leaflet.js, congestion markers, GPS)
+    │   ├── FloatingNavPanel (source/destination inputs, GPS button)
+    │   └── AutoAlertBanner (cycles VIP/emergency/congestion/accident/closure)
+    │
     └── app/dashboard/layout.tsx (Client — auth guard)
-        └── DashboardNav (Client — Firebase logout)
-        └── Page Content
-            ├── CitizenDashboard (Client)
-            │   ├── TrafficMap (Client — Leaflet.js+OpenStreetMap)
-            │   ├── TrafficSignals (Client — signal cards)
-            │   ├── TrafficAnalytics (Client — Recharts)
-            │   └── AIRecommendations (Client — AI panel)
-            └── AdminDashboard (Client)
-                ├── TrafficMap (Client — same component)
-                ├── TrafficSignals (Client — override mode)
-                ├── TrafficAnalytics (Client — admin view)
-                └── AIRecommendations (Client — implement mode)
+        └── DashboardNav (sidebar: Traffic Command, VIP, Emergency,
+        │                          Analytics, System Logs, Citizen View)
+        └── app/dashboard/page.tsx → AdminDashboard (Phase 2)
+            ├── Tab: TrafficCommand
+            │   ├── GlobalModeToggle (AI MODE / MANUAL MODE)
+            │   └── IntersectionControls (per-junction overrides)
+            ├── Tab: VIPMovement
+            │   ├── CorridorInputs (from/to + activate button)
+            │   └── TrafficMap (purple VIP polyline + crown markers)
+            ├── Tab: EmergencyMgmt
+            │   ├── EmergencyTypeSelector (Ambulance/Fire/Police)
+            │   ├── CorridorInputs (from/to + activate button)
+            │   └── TrafficMap (red emergency polyline)
+            ├── Tab: Analytics
+            │   ├── MetricCards
+            │   └── TrafficAnalytics (Recharts)
+            └── Tab: SystemLogs
+                └── LogList (color-coded timestamped entries)
 ```
 
 ---
 
-## 6. AI Traffic Intelligence Module
+## 12. AI Traffic Intelligence Module
 
 The AI module (`lib/mock-data.ts`) simulates realistic urban traffic patterns:
 
-### 6.1 Traffic Pattern Algorithm
+### 12.1 Traffic Pattern Algorithm
 
 ```typescript
 // Hour-of-day multipliers based on real urban traffic research
@@ -267,7 +477,7 @@ const patterns = {
 vehicles = baseVehicles × (multiplier + randomNoise(±0.05))
 ```
 
-### 6.2 Congestion Level Classification
+### 12.2 Congestion Level Classification
 
 | Level | Vehicle Count (as % of capacity) | Signal Strategy |
 |-------|-----------------------------------|-----------------|
@@ -275,15 +485,15 @@ vehicles = baseVehicles × (multiplier + randomNoise(±0.05))
 | 🟡 Medium | 33–66% | Extended green |
 | 🔴 High | > 66% | Adaptive control |
 
-### 6.3 AI Recommendation Types
+### 12.3 AI Recommendation Types
 
 1. **Signal Timing** — Optimal green/red duration based on queue length
-2. **Congestion Prediction** — ML-style probability forecasting  
+2. **Congestion Prediction** — ML-style probability forecasting
 3. **Route Diversion** — Alternative route suggestions
 
 ---
 
-## 7. API Design
+## 13. API Design
 
 | Endpoint | Method | Description | Data Source |
 |----------|--------|-------------|-------------|
@@ -294,7 +504,7 @@ vehicles = baseVehicles × (multiplier + randomNoise(±0.05))
 | `/api/recommendations/update` | POST | Update recommendation status | Supabase → Mock |
 | `/api/signals/update` | POST | Manual signal override | Supabase → Mock |
 | `/api/signals/emergency` | POST | Emergency corridor mode | Supabase → Mock |
-| `/api/routes/optimize` | GET | Route optimization | External API |
+| `/api/routes/optimize` | GET | Route optimization | OSRM (external) |
 
 ### Graceful Degradation Pattern
 
@@ -316,12 +526,13 @@ try {
 
 ---
 
-## 8. Security Architecture
+## 14. Security Architecture
 
 | Layer | Mechanism |
 |-------|-----------|
 | Authentication | Firebase JWT tokens |
-| Route Protection | Client-side auth check in dashboard layout |
+| Route Protection | Client-side auth check in `/dashboard` layout |
+| Public Route | `/` (Phase 1) intentionally unauthenticated |
 | API Protection | Server-side auth verification (when Supabase is active) |
 | Environment Secrets | Never exposed in client bundle (`NEXT_PUBLIC_` prefix only for public keys) |
 | XSS Prevention | React's default escaping |
@@ -329,19 +540,20 @@ try {
 
 ---
 
-## 9. Performance Optimizations
+## 15. Performance Optimizations
 
 - **Turbopack** — 5x faster builds than Webpack
 - **App Router** — Automatic code splitting per route
 - **Static Generation** — Auth pages pre-rendered (`○`) for CDN caching
 - **Dynamic Routes** — Dashboard renders on demand (`ƒ`) for fresh data
 - **Lazy Firebase Initialization** — Firebase SDK loads only on client, never during SSR
-- **Lazy Leaflet.js+OpenStreetMap** — Maps API loads only when API key is available
+- **Lazy Leaflet Loading** — Maps load only in browser (no SSR)
+- **GPS Efficiency** — `watchPosition` runs only when GPS button is active
 - **Mock Data Fallback** — Zero database latency for demo mode
 
 ---
 
-## 10. Deployment Architecture
+## 16. Deployment Architecture
 
 ```
 Developer
@@ -356,7 +568,7 @@ Vercel Edge Network
     └── HTTPS + Custom Domain
             │
             ├──▶ Firebase Auth (Google Cloud)
-            ├──▶ OpenStreetMap + OSRM
+            ├──▶ OpenStreetMap + OSRM + Nominatim
             └──▶ Supabase (optional)
 ```
 
@@ -365,7 +577,7 @@ Vercel Edge Network
 ```json
 {
   "buildCommand": "pnpm run build",
-  "installCommand": "pnpm install",  
+  "installCommand": "pnpm install",
   "framework": "nextjs",
   "regions": ["bom1"]
 }
