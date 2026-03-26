@@ -21,6 +21,12 @@ export interface RouteCoords {
   navActive?: boolean // whether navigation mode is active (shows car marker)
 }
 
+export interface MapAlert {
+  position: [number, number]
+  type: 'accident' | 'congestion' | 'vip' | 'emergency'
+  message: string
+}
+
 // Internal type for digital twin vehicles
 interface SimVehicle {
   id: number
@@ -39,6 +45,11 @@ const SIM_VEHICLE_SPEED_INCREMENT = 0.009 // increment per speed variant
 const ROUTE_SELECTION_MULTIPLIER = 3
 // Default city zoom — level 12 shows all 43 Lucknow intersections within the viewport
 const DEFAULT_CITY_ZOOM_LEVEL = 12
+
+// VIP pulse animation constants
+const PULSE_CYCLE_STEPS = 20       // number of ticks per full oscillation cycle
+const PULSE_AMPLITUDE_FACTOR = 0.35 // fraction of base radius to oscillate by
+const BASE_PULSE_RADIUS = 70       // base radius (metres) for VIP pulsing circles
 
 const CONGESTION_COLORS: Record<string, string> = {
   low: '#22c55e',
@@ -279,6 +290,36 @@ function getVehicleCount(id: string): number {
   return VEHICLE_COUNTS[id]
 }
 
+// ─── Icon singletons (created once at module level; Leaflet is client-only) ──────
+
+// Crown icon for VIP route endpoints
+let CROWN_ICON: L.DivIcon | null = null
+function getCrownIcon(): L.DivIcon {
+  if (!CROWN_ICON) {
+    CROWN_ICON = L.divIcon({
+      html: `<div style="font-size:20px;text-shadow:0 1px 4px rgba(0,0,0,0.6);line-height:1;">👑</div>`,
+      className: '',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    })
+  }
+  return CROWN_ICON
+}
+
+// GPS marker icon
+let GPS_ICON: L.DivIcon | null = null
+function getGpsIcon(): L.DivIcon {
+  if (!GPS_ICON) {
+    GPS_ICON = L.divIcon({
+      html: `<div style="width:20px;height:20px;background:#3b82f6;border-radius:50%;border:3px solid white;box-shadow:0 0 0 8px rgba(59,130,246,0.2);animation:gpsPulse 1.5s ease-in-out infinite;"></div>`,
+      className: '',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    })
+  }
+  return GPS_ICON
+}
+
 // Car marker icon for navigation mode — created once at module level (Leaflet is client-only)
 let CAR_ICON: L.DivIcon | null = null
 function getCarIcon(): L.DivIcon {
@@ -354,18 +395,154 @@ function CarNavigationMarker({ routeCoords }: { routeCoords: RouteCoords }) {
 }
 
 
+// ─── GPS keyframe style injector ────────────────────────────────────────────────
+function GpsStyle() {
+  useEffect(() => {
+    const styleId = 'drishti-gps-pulse-style'
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style')
+      style.id = styleId
+      style.textContent = `
+        @keyframes gpsPulse {
+          0%   { box-shadow: 0 0 0 0    rgba(59,130,246,0.5); }
+          70%  { box-shadow: 0 0 0 14px rgba(59,130,246,0);   }
+          100% { box-shadow: 0 0 0 0    rgba(59,130,246,0);   }
+        }
+      `
+      document.head.appendChild(style)
+    }
+  }, [])
+  return null
+}
+
+// ─── GPS auto-pan: re-centres the map whenever position changes ──────────────
+function GpsAutoPan({ position }: { position: [number, number] }) {
+  const map = useMap()
+  const prevPosition = useRef<[number, number] | null>(null)
+
+  useEffect(() => {
+    if (
+      prevPosition.current === null ||
+      prevPosition.current[0] !== position[0] ||
+      prevPosition.current[1] !== position[1]
+    ) {
+      prevPosition.current = position
+      map.setView(position, map.getZoom())
+    }
+  }, [position, map])
+
+  return null
+}
+
+// ─── VIP pulsing circles at each point along the corridor ───────────────────
+function VipPulsingCircles({ coords }: { coords: [number, number][] }) {
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => (t + 1) % PULSE_CYCLE_STEPS), 100)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Smooth sinusoidal radius oscillation
+  const scale = 1 + Math.sin((tick / PULSE_CYCLE_STEPS) * 2 * Math.PI) * PULSE_AMPLITUDE_FACTOR
+  const radius = Math.round(BASE_PULSE_RADIUS * scale)
+
+  return (
+    <>
+      {coords.map((coord, i) => (
+        <Circle
+          key={`vip-pulse-${i}`}
+          center={coord}
+          radius={radius}
+          pathOptions={{ color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.18, weight: 1 }}
+        />
+      ))}
+    </>
+  )
+}
+
+// ─── Emergency polyline with flashing opacity ────────────────────────────────
+function EmergencyPolyline({ coords }: { coords: [number, number][] }) {
+  const [bright, setBright] = useState(true)
+
+  useEffect(() => {
+    const interval = setInterval(() => setBright((b) => !b), 550)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <>
+      {/* Outer glow */}
+      <Polyline
+        positions={coords}
+        pathOptions={{ color: '#ef4444', weight: 12, opacity: bright ? 0.22 : 0.05 }}
+      />
+      {/* Core line */}
+      <Polyline
+        positions={coords}
+        pathOptions={{ color: '#ef4444', weight: 6, opacity: bright ? 0.85 : 0.3 }}
+      />
+    </>
+  )
+}
+
+// ─── Alert circle markers ────────────────────────────────────────────────────
+const ALERT_COLORS: Record<string, string> = {
+  accident: '#f97316',
+  congestion: '#eab308',
+  vip: '#7c3aed',
+  emergency: '#ef4444',
+}
+
+function AlertMarkers({ alerts }: { alerts: MapAlert[] }) {
+  return (
+    <>
+      {alerts.map((alert, i) => {
+        const color = ALERT_COLORS[alert.type] ?? '#6b7280'
+        return (
+          <CircleMarker
+            key={`alert-${i}`}
+            center={alert.position}
+            radius={10}
+            pathOptions={{ color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.9 }}
+          >
+            <Popup>
+              <div style={{ minWidth: 160, padding: 4 }}>
+                <p style={{ fontWeight: 700, fontSize: 12, color, marginBottom: 4, textTransform: 'capitalize' }}>
+                  {alert.type} Alert
+                </p>
+                <p style={{ fontSize: 11, color: '#374151' }}>{alert.message}</p>
+              </div>
+            </Popup>
+          </CircleMarker>
+        )
+      })}
+    </>
+  )
+}
+
 export default function LeafletMapInner({
   intersections,
   onSelectIntersection,
   routeCoords,
   showDigitalTwin = false,
   showHeatmap = false,
+  gpsPosition,
+  centerOnGps = false,
+  vipRoute,
+  emergencyRoute,
+  mapAlerts,
 }: {
   intersections: Intersection[]
   onSelectIntersection: (intersection: Intersection) => void
   routeCoords?: RouteCoords
   showDigitalTwin?: boolean
   showHeatmap?: boolean
+  gpsPosition?: [number, number] | null
+  centerOnGps?: boolean
+  vipRoute?: [number, number][]
+  emergencyRoute?: [number, number][]
+  mapAlerts?: MapAlert[]
 }) {
   // Default center: Lucknow, India
   const defaultCenter: [number, number] = [26.8467, 80.9462]
@@ -393,20 +570,20 @@ export default function LeafletMapInner({
       {/* AI Predictive Heatmap — shown when toggled on */}
       {showHeatmap && <PredictiveHeatmap intersections={validIntersections} />}
 
-      {/* Route polyline */}
+      {/* Route polyline — green navigation colours */}
       {routeCoords && routeCoords.coordinates.length > 1 && (
         <>
           {/* Route shadow */}
           <Polyline
             positions={routeCoords.coordinates}
-            color="#1e40af"
+            color="#15803d"
             weight={8}
             opacity={0.25}
           />
           {/* Route line */}
           <Polyline
             positions={routeCoords.coordinates}
-            color="#3b82f6"
+            color="#16a34a"
             weight={5}
             opacity={0.9}
           />
@@ -555,6 +732,60 @@ export default function LeafletMapInner({
 
       {/* Digital Traffic Twin — simulated moving vehicles (shown when toggled on) */}
       {showDigitalTwin && <DigitalTwinVehicles intersections={validIntersections} />}
+
+      {/* VIP Corridor */}
+      {vipRoute && vipRoute.length > 1 && (
+        <>
+          <Polyline
+            positions={vipRoute}
+            pathOptions={{ color: '#7c3aed', weight: 6, opacity: 0.8, dashArray: '12 4' }}
+          />
+          <VipPulsingCircles coords={vipRoute} />
+          {/* Crown markers at start and end */}
+          <Marker position={vipRoute[0]} icon={getCrownIcon()}>
+            <Popup><div style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed' }}>VIP Corridor Start</div></Popup>
+          </Marker>
+          <Marker position={vipRoute[vipRoute.length - 1]} icon={getCrownIcon()}>
+            <Popup><div style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed' }}>VIP Corridor End</div></Popup>
+          </Marker>
+        </>
+      )}
+
+      {/* Emergency Corridor */}
+      {emergencyRoute && emergencyRoute.length > 1 && (
+        <>
+          <EmergencyPolyline coords={emergencyRoute} />
+          {/* Gradient circles at start and end */}
+          <Circle
+            center={emergencyRoute[0]}
+            radius={120}
+            pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.25, weight: 2 }}
+          >
+            <Popup><div style={{ fontSize: 12, fontWeight: 700, color: '#ef4444' }}>Emergency Route Start</div></Popup>
+          </Circle>
+          <Circle
+            center={emergencyRoute[emergencyRoute.length - 1]}
+            radius={120}
+            pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.25, weight: 2 }}
+          >
+            <Popup><div style={{ fontSize: 12, fontWeight: 700, color: '#ef4444' }}>Emergency Route End</div></Popup>
+          </Circle>
+        </>
+      )}
+
+      {/* Alert markers */}
+      {mapAlerts && mapAlerts.length > 0 && <AlertMarkers alerts={mapAlerts} />}
+
+      {/* GPS user location marker */}
+      {gpsPosition && (
+        <>
+          <GpsStyle />
+          {centerOnGps && <GpsAutoPan position={gpsPosition} />}
+          <Marker position={gpsPosition} icon={getGpsIcon()}>
+            <Popup><div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6' }}>Your Location</div></Popup>
+          </Marker>
+        </>
+      )}
     </MapContainer>
   )
 }

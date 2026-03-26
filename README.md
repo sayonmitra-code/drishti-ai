@@ -14,60 +14,101 @@
 
 DRISHTI is an **AI-powered Smart City Traffic Intelligence Platform** designed for urban traffic awareness and intelligent traffic management. Built for both citizens navigating the city and traffic administrators managing city-wide infrastructure.
 
-The platform simulates a real smart-city deployment integrating:
+The platform operates in two phases:
+- **Phase 1 (Citizen Mode)** — Public-facing interface at `/`, no login required; light theme
+- **Phase 2 (Official Control Mode)** — Authenticated command center at `/dashboard`; dark theme
+
+Core integrations:
 - **Real-time traffic visualization** via Leaflet.js + OpenStreetMap (100% free, no API key required)
-- **Firebase Authentication** for secure multi-role access (Google Sign-In + Email/Password)
+- **Firebase Authentication** for secure official access (Google Sign-In + Email/Password)
 - **AI-driven traffic analytics** and congestion prediction
-- **Interactive dashboards** for both citizens and administrators
 - **India-wide routing** using OSRM + Nominatim geocoding
+- **GPS Live Location** via browser `navigator.geolocation`
 - **Default city: Lucknow, India** (26.8467°N, 80.9462°E)
 
 ---
 
 ## 🖥️ Platform Overview
 
+| Phase | Route | Audience | Description |
+|-------|-------|----------|-------------|
+| **Phase 1 — Citizen Mode** | `/` | Public (no login) | Full-screen navigation map, GPS tracking, auto alert banners, India-wide routing |
+| **Phase 2 — Official Control** | `/dashboard` | Authenticated officials | Traffic Command Center with 5 admin modules |
+| **Login** | `/auth/login` | Officials | Firebase Auth → redirects to `/dashboard` |
+
+### Dashboard Admin Modules (Phase 2)
+
 | Module | Description |
 |--------|-------------|
-| **Citizen Dashboard** | Interactive map with India-wide routing, traffic signals, and AI congestion alerts |
-| **Traffic Control Center** | Admin panel with intersection monitoring, AI signal control, and analytics |
-| **Master Admin Portal** | Secure login at `/master-admin` with Email/Password and Google Sign-In |
+| **Traffic Command** | Global AI/Manual mode toggle + per-intersection signal controls |
+| **VIP Movement** | Corridor activation with OSRM routing and citizen alert broadcast |
+| **Emergency Mgmt** | Ambulance / Fire Brigade / Police green corridor with red cross-traffic |
+| **Analytics** | Metric cards + hourly traffic Recharts charts |
+| **System Logs** | Timestamped, color-coded event log of all control actions |
 
 ---
 
 ## ✨ Features
 
-### Citizen Navigation Dashboard
-- 🗺️ Interactive Leaflet map centered on Lucknow, India
-- 🛣️ India-wide source → destination routing (e.g. Lucknow → Goa, Lucknow → Kolkata)
-- 🚗 **Car Navigation Mode** — animated vehicle marker moving along the route
-- 🚦 Traffic signal visibility during navigation with color, timer, and distance
-- 📊 AI congestion prediction charts for the next 24 hours
-- 🔴🟡🟢 Real-time signal status per intersection
+### Phase 1 — Citizen Mode (No Login Required)
+
+- 🗺️ **Full-screen Navigation Map** — map expands to full viewport once a route is found; floating navigation panel overlaid
+- 📍 **Free GPS Live Location** — `navigator.geolocation.watchPosition()` button in navigation panel; car marker follows user's real GPS position with auto-pan
+- 🛣️ India-wide source → destination routing (Lucknow → Goa, Lucknow → Kolkata, etc.)
+- 🚗 **Animated Car Marker** — moves along the green (#16A34A) route polyline
+- 🔴🟡🟢 **Traffic Congestion Markers** — colored circles at key intersections
+- 🔔 **Auto Alert Banners** — automatic cycling alerts (no toggle needed):
+  - VIP movement active notices
+  - Emergency vehicle corridor notices
+  - Heavy congestion warnings
+  - Accident reports
+  - Road closures
+- ☀️ **Light Theme** — white background, purple brand (#7C3AED), green navigation (#16A34A)
 - 📱 Mobile-responsive UI
-- 🔔 Smart alerts and demo incident mode
 
-### Smart Traffic Control Center (Admin)
-- 🗺️ City-wide traffic overview map (Lucknow intersections)
-- 📡 Intersection monitoring system (8 key Lucknow junctions)
-- 📈 Traffic analytics with hourly vehicle counts
+### Phase 2 — Official Control Mode (Login Required)
+
+#### Traffic Command
+- 🕹️ **Global Mode Toggle** — prominent AI MODE vs MANUAL MODE buttons
+- ⚙️ Per-intersection manual signal override
 - 🤖 AI-based signal timing recommendations
-- 🕹️ Manual Mode / AI Mode toggle
-- 🚨 Emergency corridor activation simulation
-- ⚙️ Manual signal override capability
-- 📉 Congestion trend visualization (Line + Bar charts)
 
-### Master Admin Portal (`/master-admin`)
-- 🔐 Email + Password login for pre-approved admin accounts
-- 🔑 Google Sign-In option
-- 🚫 Non-admin accounts automatically redirected after 3 seconds
-- Admin emails configurable via `NEXT_PUBLIC_ADMIN_EMAILS` env var
+#### VIP Movement
+- 👑 Enter from/to locations → auto-calculates OSRM route
+- 🟣 Purple (#7C3AED) pulsing polyline with crown icon markers on the map
+- 📢 Citizen alert preview broadcast when corridor is activated
+
+#### Emergency Vehicle System
+- 🚑 Three types: **Ambulance / Fire Brigade / Police**
+- 🔴 Red flashing polyline on the map for the emergency corridor
+- 🚦 Cross-traffic signals set to RED automatically
+- ✅ Green corridor cleared for emergency vehicle passage
+
+#### Analytics
+- 📊 Metric cards (total vehicles, avg wait time, incidents, AI efficiency)
+- 📈 Hourly traffic charts (Recharts line + bar)
+
+#### System Logs
+- 📋 All control actions logged automatically with timestamps
+- 🎨 Color-coded by type: AI decisions, manual overrides, VIP activations, emergency activations, mode switches
+
+### Map Enhancements
+
+- 🔵 **GPS Marker** — blue pulsing circle at user's real GPS location
+- 🟣 **VIP Route** — purple pulsing polyline with crown icon markers
+- 🔴 **Emergency Route** — red flashing polyline
+- 🟢 **Navigation Route** — green (#16A34A) polyline
+- 📌 **Alert Markers** — colored markers for accidents, congestion, VIP, and emergency events
 
 ### AI Traffic Intelligence
+
 - Simulated traffic density using realistic urban hour-of-day patterns
 - Peak hour detection (8–9 AM, 6–8 PM)
 - Congestion probability forecasting
 - Priority-based signal recommendation system
 - Vehicle count simulation (vehiclesIncoming, vehiclesWaiting, vehiclesPassed)
+
+---
 
 ---
 
@@ -101,24 +142,23 @@ drishti-ai/
 │   │   ├── signals/                # Signal control
 │   │   └── traffic/predict/        # AI traffic prediction
 │   ├── auth/
-│   │   ├── login/                  # Firebase login page
+│   │   ├── login/                  # Firebase login page → redirects to /dashboard
 │   │   └── sign-up/                # Firebase registration
 │   ├── dashboard/
-│   │   ├── admin/                  # Traffic Control Center
 │   │   ├── layout.tsx              # Auth-protected layout
-│   │   └── page.tsx                # Citizen Dashboard
-│   ├── master-admin/               # Master admin portal (/master-admin)
+│   │   └── page.tsx                # Official Control Center (Phase 2)
+│   ├── page.tsx                    # Citizen Interface (Phase 1, no login)
 │   └── layout.tsx                  # Root layout with AuthProvider
 ├── components/
 │   ├── dashboard/
 │   │   ├── traffic-map.tsx         # Leaflet map wrapper
-│   │   ├── traffic-map-inner.tsx   # Leaflet map with car navigation marker
+│   │   ├── traffic-map-inner.tsx   # Leaflet map: car marker, GPS, VIP/Emergency routes
 │   │   ├── traffic-signals.tsx     # Signal visualization
 │   │   ├── traffic-analytics.tsx   # Charts & analytics
 │   │   ├── ai-recommendations.tsx  # AI suggestion panel
-│   │   ├── citizen-dashboard.tsx   # Full citizen view + India-wide routing
-│   │   ├── admin-dashboard.tsx     # Full admin view
-│   │   └── nav.tsx                 # Navigation with Firebase auth
+│   │   ├── citizen-dashboard.tsx   # Phase 1: full-screen map + GPS + auto alerts
+│   │   ├── admin-dashboard.tsx     # Phase 2: 5-module command center
+│   │   └── nav.tsx                 # Sidebar: Traffic Command, VIP, Emergency, Analytics, Logs
 │   └── ui/                         # shadcn/ui components
 ├── lib/
 │   ├── firebase/
@@ -203,10 +243,9 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### Admin Access
 
-Admin accounts are managed via email allowlist:
+Official accounts authenticate via Firebase and are redirected to `/dashboard` (Traffic Command Center). Admin emails are managed via the `NEXT_PUBLIC_ADMIN_EMAILS` environment variable:
 - Default admin emails: `admin@city.gov`, `traffic.control@city.gov`
 - To add custom admin emails: set `NEXT_PUBLIC_ADMIN_EMAILS=email1@domain.com,email2@domain.com`
-- Admin panel available at: `/master-admin` (Email/Password + Google Sign-In)
 
 ---
 
@@ -215,8 +254,9 @@ Admin accounts are managed via email allowlist:
 The platform uses **100% free** navigation services:
 
 - **Geocoding**: Nominatim (OpenStreetMap) — converts place names to coordinates
-- **Routing**: OSRM (Open Source Routing Machine) — calculates driving routes
+- **Routing**: OSRM (Open Source Routing Machine) — calculates driving routes for citizen nav, VIP corridors, and emergency routing
 - **Maps**: Leaflet.js + OpenStreetMap tiles — renders interactive maps
+- **GPS**: Browser `navigator.geolocation.watchPosition()` — free, no API key required
 
 ### Supported Routes
 Any source → destination within India, for example:
